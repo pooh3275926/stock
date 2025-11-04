@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>投資組合儀表板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'light-bg': '#F5F1E9',      // Morandi Light Beige
+              'light-text': '#6B6358',     // Morandi Deep Grey
+              'light-card': '#FEFBF6',    // Morandi Beige
+              'light-border': '#EBE3D5',
+
+              'dark-bg': '#2C2A28',       // Morandi Light Black
+              'dark-text': '#EAE1D4',     // Morandi Deep Beige (for text)
+              'dark-card': '#403D39',     // Morandi Deep Grey
+              'dark-border': '#55514C',   
+
+              'primary': {
+                DEFAULT: '#B08968',       // Muted warm brown
+                hover: '#a17c5e',
+                foreground: '#FFFFFF',
+              },
+              'success': '#8F9D8A',       // Morandi Green
+              'danger': '#C08581',        // Morandi Red
+            },
+          },
+        },
+      }
+    </script>
+    <script>
+      // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+      if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text transition-colors duration-300">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
