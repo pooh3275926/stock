@@ -184,7 +184,7 @@ const DividendRow: React.FC<{dividend: any; avgCost: number; settings: Settings;
             </td>
             <td className="px-6 py-4">{new Date(dividend.date).toLocaleDateString()}</td>
             <td className="px-6 py-4 text-right">{dividend.sharesHeld?.toLocaleString() ?? 'N/A'}</td>
-            <td className="px-6 py-4 text-right"></td>
+            <td className="px-6 py-4 text-right">{dividend.dividendPerShare?.toFixed(4)}</td>
             <td className="px-6 py-4 text-right">{formatCurrency(proportionalCost, settings.currency)}</td>
             <td className="px-6 py-4 text-right font-semibold text-success">{formatCurrency(dividend.amount, settings.currency)}</td>
             <td className="px-6 py-4 text-right text-success">{dividend.yieldRate.toFixed(2)}%</td>
