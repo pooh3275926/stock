@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { PortfolioDonutChart, DividendBarChart, ProfitLossBarChart, AdvancedMonthlyDividendChart, MonthlyRealizedPnlChart, CumulativeReturnChart } from '../components/PortfolioCharts';
-import { Stock, Dividend, Settings } from '../types';
+import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
 
@@ -17,9 +17,10 @@ interface DashboardPageProps {
   availableYears: number[];
   selectedYear: number | 'all';
   onYearChange: (year: number | 'all') => void;
+  historicalPrices: HistoricalPrice[];
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
 
   const { filteredStocks, filteredDividends, yearFilteredStocks } = useMemo(() => {
     const symbolsSet = new Set(filteredSymbols);
@@ -136,7 +137,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">累積報酬 vs 成本</h2>
-            <CumulativeReturnChart stocks={yearFilteredStocks} theme={theme} />
+            <CumulativeReturnChart stocks={yearFilteredStocks} theme={theme} historicalPrices={historicalPrices} />
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">月已實現損益</h2>

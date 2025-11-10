@@ -43,4 +43,11 @@ export interface Settings {
   displayMode: 'PERCENTAGE' | 'AMOUNT';
 }
 
-export type Page = 'DASHBOARD' | 'PORTFOLIO' | 'DIVIDENDS' | 'DONATION_FUND' | 'TRANSACTION_HISTORY' | 'SETTINGS';
+export interface HistoricalPrice {
+  stockSymbol: string;
+  prices: {
+    [yearMonth: string]: number; // Format: "YYYY-MM"
+  };
+}
+
+export type Page = 'DASHBOARD' | 'PORTFOLIO' | 'DIVIDENDS' | 'DONATION_FUND' | 'TRANSACTION_HISTORY' | 'HISTORICAL_PRICES' | 'SETTINGS';

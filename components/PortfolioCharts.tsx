@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 // FIX: Added AreaChart to the import from recharts to resolve 'Cannot find name' errors.
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, ComposedChart, Area, AreaChart } from 'recharts';
-import { Stock, Dividend, Transaction } from '../types';
+import { Stock, Dividend, Transaction, HistoricalPrice } from '../types';
 import { calculateStockFinancials } from '../utils/calculations';
 
 const COLORS = ['#B08968', '#8F9D8A', '#E0C392', '#C08581', '#AEC5D1', '#B3A6C2'];
@@ -276,9 +276,11 @@ export const MonthlyRealizedPnlChart: React.FC<MonthlyRealizedPnlChartProps> = (
 interface CumulativeReturnChartProps {
     stocks: Stock[];
     theme: 'light' | 'dark';
+    historicalPrices?: HistoricalPrice[];
 }
-export const CumulativeReturnChart: React.FC<CumulativeReturnChartProps> = ({ stocks, theme }) => {
+export const CumulativeReturnChart: React.FC<CumulativeReturnChartProps> = ({ stocks, theme, historicalPrices }) => {
     const chartData = useMemo(() => {
+        const historicalPricesMap = new Map(historicalPrices?.map(hp => [hp.stockSymbol, hp.prices]));
         const dataByMonth: { [key: string]: { cost: number; value: number } } = {};
         const allTransactions: (Transaction & { symbol: string, currentPrice: number })[] = [];
         stocks.forEach(s => {
@@ -318,9 +320,11 @@ export const CumulativeReturnChart: React.FC<CumulativeReturnChartProps> = ({ st
 
             let totalCost = 0;
             let totalValue = 0;
-            Object.values(portfolio).forEach(stock => {
+            Object.entries(portfolio).forEach(([symbol, stock]) => {
                 totalCost += stock.cost;
-                totalValue += stock.shares * stock.currentPrice;
+                const priceForMonth = historicalPricesMap.get(symbol)?.[monthKey];
+                const priceToUse = typeof priceForMonth === 'number' ? priceForMonth : stock.currentPrice;
+                totalValue += stock.shares * priceToUse;
             });
 
             dataByMonth[monthKey] = { cost: totalCost, value: totalValue };
@@ -330,7 +334,7 @@ export const CumulativeReturnChart: React.FC<CumulativeReturnChartProps> = ({ st
             name: `${parseInt(key.split('-')[1])}月`,
             ...value,
         }));
-    }, [stocks]);
+    }, [stocks, historicalPrices]);
 
     if (chartData.length === 0) {
         return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無歷史交易資料可供分析</div>;

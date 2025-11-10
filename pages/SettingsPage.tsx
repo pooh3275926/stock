@@ -41,7 +41,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onExport, onImport, 
       <div className="space-y-8 max-w-2xl">
         <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">資料匯出</h2>
-          <p className="mb-6 text-light-text/80 dark:text-dark-text/80">將您所有的投資組合、交易紀錄 (包含買入與賣出)、股利和奉獻紀錄匯出為一個 JSON 檔案作為備份。</p>
+          <p className="mb-6 text-light-text/80 dark:text-dark-text/80">將您所有的投資組合、交易、股利、奉獻和歷史股價紀錄匯出為一個 JSON 檔案作為備份。</p>
           <button onClick={onExport} className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold py-3 px-5 rounded-lg flex items-center"><DownloadIcon className="h-5 w-5 mr-2" />匯出資料</button>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md">

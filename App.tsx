@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { DashboardIcon, PortfolioIcon, DividendIcon, HeartIcon, SettingsIcon, SunIcon, MoonIcon, HistoryIcon } from './components/Icons';
-import type { Stock, Dividend, Settings, Page, Transaction, Donation } from './types';
+import { DashboardIcon, PortfolioIcon, DividendIcon, HeartIcon, SettingsIcon, SunIcon, MoonIcon, HistoryIcon, PresentationChartLineIcon } from './components/Icons';
+import type { Stock, Dividend, Settings, Page, Transaction, Donation, HistoricalPrice } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { calculateStockFinancials } from './utils/calculations';
 import { stockMaster } from './utils/data';
@@ -11,6 +11,7 @@ import { DividendsPage } from './pages/DividendsPage';
 import { DonationFundPage } from './pages/DonationFundPage';
 import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { HistoricalPricesPage } from './pages/HistoricalPricesPage';
 import { ModalContainer, ModalState } from './components/modals';
 import { ScrollToTopButton } from './components/common';
 
@@ -20,6 +21,7 @@ const pageTitles: { [key in Page]: string } = {
   DIVIDENDS: '股利紀錄',
   DONATION_FUND: '奉獻基金',
   TRANSACTION_HISTORY: '交易紀錄',
+  HISTORICAL_PRICES: '歷史股價',
   SETTINGS: '設定',
 };
 
@@ -29,6 +31,7 @@ const App: React.FC = () => {
   const [stocks, setStocks] = useLocalStorage<Stock[]>('portfolio-stocks', []);
   const [dividends, setDividends] = useLocalStorage<Dividend[]>('portfolio-dividends', []);
   const [donations, setDonations] = useLocalStorage<Donation[]>('portfolio-donations', []);
+  const [historicalPrices, setHistoricalPrices] = useLocalStorage<HistoricalPrice[]>('portfolio-historical-prices', []);
   const [settings, setSettings] = useLocalStorage<Settings>('portfolio-settings', {
     currency: 'TWD',
     transactionFeeRate: 0.001425,
@@ -364,7 +367,8 @@ const App: React.FC = () => {
     const data = { 
       stocks, 
       dividends, 
-      donations, 
+      donations,
+      historicalPrices, 
       settings,
       sellHistory: sellHistoryForExport,
     };
@@ -380,6 +384,7 @@ const App: React.FC = () => {
     setStocks(data.stocks || []);
     setDividends(data.dividends || []);
     setDonations(data.donations || []);
+    setHistoricalPrices(data.historicalPrices || []);
     setModal(null);
     alert('資料已成功匯入！');
   };
@@ -398,6 +403,7 @@ const App: React.FC = () => {
                     availableYears={availableYears}
                     selectedYear={selectedDashboardYear}
                     onYearChange={setSelectedDashboardYear}
+                    historicalPrices={historicalPrices}
                 />;
       case 'PORTFOLIO':
         return <PortfolioPage 
@@ -455,6 +461,12 @@ const App: React.FC = () => {
                     onEditTransaction={handleEditTransaction}
                     onDeleteTransaction={handleDeleteTransaction}
                 />;
+      case 'HISTORICAL_PRICES':
+          return <HistoricalPricesPage
+                      stocks={stocks}
+                      historicalPrices={historicalPrices}
+                      onSave={setHistoricalPrices}
+                  />;
       case 'SETTINGS':
         return <SettingsPage onExport={handleExportData} onImport={handleImportData} openModal={setModal} />;
       default:
@@ -479,7 +491,7 @@ const App: React.FC = () => {
 };
 
 // --- Navigation Components ---
-const navItems = [ { id: 'DASHBOARD', icon: DashboardIcon, label: '總覽' }, { id: 'PORTFOLIO', icon: PortfolioIcon, label: '我的持股' }, { id: 'DIVIDENDS', icon: DividendIcon, label: '股利紀錄' }, { id: 'DONATION_FUND', icon: HeartIcon, label: '奉獻基金' }, { id: 'TRANSACTION_HISTORY', icon: HistoryIcon, label: '賣出紀錄' }, { id: 'SETTINGS', icon: SettingsIcon, label: '設定' }];
+const navItems = [ { id: 'DASHBOARD', icon: DashboardIcon, label: '總覽' }, { id: 'PORTFOLIO', icon: PortfolioIcon, label: '我的持股' }, { id: 'DIVIDENDS', icon: DividendIcon, label: '股利紀錄' }, { id: 'DONATION_FUND', icon: HeartIcon, label: '奉獻基金' }, { id: 'TRANSACTION_HISTORY', icon: HistoryIcon, label: '賣出紀錄' }, { id: 'HISTORICAL_PRICES', icon: PresentationChartLineIcon, label: '歷史股價' }, { id: 'SETTINGS', icon: SettingsIcon, label: '設定' }];
 const Sidebar: React.FC<{ setPage: (page: Page) => void; currentPage: Page, theme: 'light' | 'dark', toggleTheme: () => void; }> = ({ setPage, currentPage, theme, toggleTheme }) => {
     return (
         <nav className="hidden md:flex md:flex-col w-64 bg-light-card dark:bg-dark-card p-6 shadow-lg shrink-0">
