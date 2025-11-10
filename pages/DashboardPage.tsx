@@ -130,10 +130,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     });
 
     const topPnl = [...contributionData].sort((a, b) => b.unrealizedPnl - a.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
-    const bottomPnl = [...contributionData].filter(d => d.unrealizedPnl < 0).sort((a, b) => a.unrealizedPnl - b.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
+    const bottomPnl = [...contributionData].sort((a, b) => a.unrealizedPnl - b.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
     
     const topTotalReturn = [...contributionData].sort((a, b) => b.totalReturnWithDividends - a.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
-    const bottomTotalReturn = [...contributionData].filter(d => d.totalReturnWithDividends < 0).sort((a, b) => a.totalReturnWithDividends - b.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
+    const bottomTotalReturn = [...contributionData].sort((a, b) => a.totalReturnWithDividends - b.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
 
     const topYield = [...contributionData].sort((a, b) => b.avgAnnualizedYield - a.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
     const bottomYield = [...contributionData].filter(d => d.avgAnnualizedYield > 0).sort((a, b) => a.avgAnnualizedYield - b.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
