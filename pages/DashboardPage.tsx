@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { PortfolioDonutChart, DividendBarChart, ProfitLossBarChart, AdvancedMonthlyDividendChart, MonthlyRealizedPnlChart, CumulativeReturnChart } from '../components/PortfolioCharts';
 import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
-import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
+import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
 
 
@@ -22,9 +22,19 @@ interface DashboardPageProps {
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
 
+  const stocksWithLatestPrice = useMemo(() => {
+    return stocks.map(stock => {
+      const latestPrice = getLatestHistoricalPrice(stock.symbol, historicalPrices);
+      if (latestPrice !== null) {
+        return { ...stock, currentPrice: latestPrice };
+      }
+      return stock;
+    });
+  }, [stocks, historicalPrices]);
+
   const { filteredStocks, filteredDividends, yearFilteredStocks } = useMemo(() => {
     const symbolsSet = new Set(filteredSymbols);
-    const stocksBySymbol = stocks.filter(s => symbolsSet.has(s.symbol));
+    const stocksBySymbol = stocksWithLatestPrice.filter(s => symbolsSet.has(s.symbol));
     const dividendsBySymbol = dividends.filter(d => symbolsSet.has(d.stockSymbol));
     
     if (selectedYear === 'all') {
@@ -55,7 +65,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       filteredDividends: yearFilteredDividends,
       yearFilteredStocks: stocksWithOnlyYearTransactions, // For P&L charts for that year
     };
-  }, [stocks, dividends, filteredSymbols, selectedYear]);
+  }, [stocksWithLatestPrice, dividends, filteredSymbols, selectedYear]);
 
   const stats = useMemo(() => {
     let totalCurrentCost = 0, totalMarketValue = 0;

@@ -1,4 +1,4 @@
-import { Stock } from '../types';
+import { Stock, HistoricalPrice } from '../types';
 
 // Helper function to format currency
 export const formatCurrency = (value: number, currency: 'USD' | 'TWD' = 'TWD', fractionDigits: number = 0) => {
@@ -12,6 +12,24 @@ export const formatCurrency = (value: number, currency: 'USD' | 'TWD' = 'TWD', f
     maximumFractionDigits: fractionDigits,
   }).format(value);
 };
+
+// --- New Helper Function ---
+/**
+ * Gets the latest price for a stock from the historical price records.
+ * @param symbol - The stock symbol.
+ * @param historicalPrices - The array of all historical price records.
+ * @returns The latest price as a number, or null if not found.
+ */
+export const getLatestHistoricalPrice = (symbol: string, historicalPrices: HistoricalPrice[]): number | null => {
+    const stockPrices = historicalPrices.find(hp => hp.stockSymbol === symbol);
+    if (!stockPrices || Object.keys(stockPrices.prices).length === 0) {
+        return null;
+    }
+    // Find the latest month (e.g., "2024-05") by sorting the keys
+    const latestMonth = Object.keys(stockPrices.prices).sort().pop();
+    return latestMonth ? stockPrices.prices[latestMonth] : null;
+};
+
 
 // --- Calculation Helpers ---
 export const calculateStockFinancials = (stock: Stock) => {

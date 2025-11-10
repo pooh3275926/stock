@@ -1,23 +1,26 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CloseIcon } from './Icons';
-import type { Stock, Transaction, Dividend, Donation, Settings } from '../types';
-import { calculateStockFinancials } from '../utils/calculations';
+import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice } from '../types';
+import { calculateStockFinancials, getLatestHistoricalPrice } from '../utils/calculations';
 import { stockMaster } from '../utils/data';
+import { ParsedResult } from '../utils/parser';
 
-export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION';
+export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW';
 export interface ModalState {
   type: ModalType;
   data?: any;
 }
 
 // --- Modal and Forms ---
-export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; stocks: Stock[]; settings: Settings}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, stocks, settings }) => {
+export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, onBulkImport, stocks, settings, historicalPrices }) => {
     const renderContent = () => {
+        if (!modal.type) return null;
         switch(modal.type) {
-            case 'STOCK_TRANSACTION': return <StockTransactionForm stocks={stocks} settings={settings} onSave={onSaveTransaction} onCancel={closeModal} mode={modal.data.mode} stock={modal.data.stock} transaction={modal.data.transaction} />;
+            case 'STOCK_TRANSACTION': return <StockTransactionForm stocks={stocks} settings={settings} onSave={onSaveTransaction} onCancel={closeModal} mode={modal.data.mode} stock={modal.data.stock} transaction={modal.data.transaction} historicalPrices={historicalPrices} />;
             case 'DIVIDEND': return <DividendForm stocks={stocks} onSave={handleSaveDividend} onCancel={closeModal} mode={modal.data.mode} dividend={modal.data.dividend} />;
             case 'DONATION_FORM': return <DonationForm onSave={handleSaveDonation} onCancel={closeModal} mode={modal.data.mode} donation={modal.data.donation} />;
             case 'DELETE_CONFIRMATION': return <DeleteConfirmation title={modal.data.title} message={modal.data.message} onConfirm={modal.data.onConfirm} onCancel={modal.data.onCancel || closeModal} />;
+            case 'IMPORT_PREVIEW': return <ImportPreviewModal parsedData={modal.data.parsedData} importType={modal.data.importType} onConfirm={onBulkImport} onCancel={closeModal} />;
             default: return null;
         }
     };
@@ -26,16 +29,19 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
     const handleSaveDonation = (data: Omit<Donation, 'id'>) => onSaveDonation(data, modal.data?.donation?.id);
 
     if (!modal) return null;
+    
+    const isLargeModal = modal.type === 'IMPORT_PREVIEW';
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeModal}>
-            <div className="bg-light-card dark:bg-dark-card rounded-lg shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className={`bg-light-card dark:bg-dark-card rounded-lg shadow-xl w-full ${isLargeModal ? 'max-w-2xl' : 'max-w-md'}`} onClick={e => e.stopPropagation()}>
                 {renderContent()}
             </div>
         </div>
     );
 };
 
-const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSave: (formData: Omit<Transaction, 'id'> & { symbol: string; name?: string; currentPrice?: number }, mode: 'add' | 'edit' | 'buy' | 'sell', originalTransactionId?: string) => void; onCancel: () => void; mode: 'add' | 'edit' | 'buy' | 'sell'; stock?: Stock; transaction?: Transaction; }> = ({ stocks, settings, onSave, onCancel, mode, stock, transaction }) => {
+const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSave: (formData: Omit<Transaction, 'id'> & { symbol: string; name?: string; currentPrice?: number }, mode: 'add' | 'edit' | 'buy' | 'sell', originalTransactionId?: string) => void; onCancel: () => void; mode: 'add' | 'edit' | 'buy' | 'sell'; stock?: Stock; transaction?: Transaction; historicalPrices: HistoricalPrice[]; }> = ({ stocks, settings, onSave, onCancel, mode, stock, transaction, historicalPrices }) => {
     const isAddMode = mode === 'add';
     const isSellMode = mode === 'sell' || (mode === 'edit' && transaction?.type === 'SELL');
 
@@ -76,6 +82,15 @@ const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSa
     
     const calculatedAvgCost = useMemo(() => { const numShares = parseFloat(shares); const numPrice = parseFloat(price); const numFees = parseFloat(fees); if (numShares > 0 && numPrice >= 0 && numFees >= 0) { return ((numPrice * numShares + numFees) / numShares).toFixed(4); } return '0.00'; }, [shares, price, fees]);
     
+    const handleUseLatestPrice = () => {
+        const latestPrice = getLatestHistoricalPrice(symbol, historicalPrices);
+        if (latestPrice !== null) {
+            setCurrentPrice(latestPrice.toString());
+        } else {
+            alert(`股票 ${symbol} 尚無歷史股價紀錄。`);
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const numShares = parseFloat(shares);
@@ -100,7 +115,13 @@ const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSa
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="text" placeholder="股票名稱 (選填)" value={name} onChange={e => setName(e.target.value)} disabled={mode === 'buy' || mode === 'sell'} />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder={`${actionText}股數`} value={shares} onChange={e => setShares(e.target.value)} required />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder={`${actionText}單價`} value={price} onChange={e => setPrice(e.target.value)} required />
-            <div><label className="text-sm text-light-text/70 dark:text-dark-text/70">更新目前股價 (選填)</label><input className="w-full p-3 mt-1 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder="手動更新股價" value={currentPrice} onChange={e => setCurrentPrice(e.target.value)} /></div>
+            <div>
+                <label className="text-sm text-light-text/70 dark:text-dark-text/70">更新目前股價 (選填)</label>
+                <div className="relative mt-1">
+                    <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder="手動更新股價" value={currentPrice} onChange={e => setCurrentPrice(e.target.value)} />
+                    <button type="button" onClick={handleUseLatestPrice} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-primary/20 text-primary px-2 py-1 rounded hover:bg-primary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!symbol} title="使用最新的歷史價格">套用最新</button>
+                </div>
+            </div>
             <div><label className="text-sm text-light-text/70 dark:text-dark-text/70">{`${actionText}手續費`}{isSellMode && ' + 證交稅'}</label><input className="w-full p-3 mt-1 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" value={fees} onChange={e => { setFees(e.target.value); setIsFeeManuallyEdited(true); }} required /></div>
             {!isSellMode && <div><label className="text-sm text-light-text/70 dark:text-dark-text/70">成本均價 (參考)</label><input className="w-full p-3 mt-1 bg-light-bg/70 dark:bg-dark-bg/70 rounded-lg border border-light-border dark:border-dark-border" type="text" value={calculatedAvgCost} readOnly disabled /></div>}
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="date" value={date} onChange={e => setDate(e.target.value)} required />
@@ -154,3 +175,78 @@ const DeleteConfirmation: React.FC<{title: string, message?: string, onConfirm: 
         </div>
     </div>
 );
+
+const ImportPreviewModal: React.FC<{
+  parsedData: ParsedResult<any>;
+  importType: 'transactions' | 'dividends' | 'donations' | 'prices';
+  onConfirm: (type: string, data: any[]) => void;
+  onCancel: () => void;
+}> = ({ parsedData, importType, onConfirm, onCancel }) => {
+    const { success, errors } = parsedData;
+    const typeMap = { transactions: '交易', dividends: '股利', donations: '奉獻', prices: '歷史股價' };
+    const title = `預覽匯入的${typeMap[importType]}資料`;
+
+    const renderSuccessTable = () => {
+        if (success.length === 0) return null;
+        const headers = Object.keys(success[0]);
+        return (
+            <div className="max-h-60 overflow-y-auto border border-light-border dark:border-dark-border rounded-lg">
+                <table className="w-full text-sm">
+                    <thead className="bg-light-bg dark:bg-dark-bg sticky top-0">
+                        <tr>
+                            {headers.map(h => <th key={h} className="p-2 font-semibold text-left">{h}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-light-border dark:divide-dark-border">
+                        {success.map((item, index) => (
+                            <tr key={index} className="hover:bg-light-bg dark:hover:bg-dark-bg">
+                                {headers.map(h => <td key={h} className="p-2 whitespace-nowrap">{String(item[h])}</td>)}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    return (
+        <div className="p-6 space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">{title}</h2>
+                <button type="button" onClick={onCancel} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg"><CloseIcon className="h-6 w-6"/></button>
+            </div>
+
+            {success.length > 0 && (
+                <div>
+                    <h3 className="font-semibold mb-2 text-success">成功解析 {success.length} 筆資料：</h3>
+                    {renderSuccessTable()}
+                </div>
+            )}
+
+            {errors.length > 0 && (
+                <div>
+                    <h3 className="font-semibold mb-2 text-danger">發現 {errors.length} 筆格式錯誤：</h3>
+                    <ul className="max-h-32 overflow-y-auto bg-light-bg dark:bg-dark-bg p-3 rounded-lg text-sm space-y-1">
+                        {errors.map((err, i) => <li key={i}>第 {err.line} 行: {err.error}</li>)}
+                    </ul>
+                </div>
+            )}
+            
+            <p className="text-sm text-light-text/70 dark:text-dark-text/70">
+                {success.length > 0 ? `確認後將匯入 ${success.length} 筆有效資料。錯誤的資料將被忽略。` : '沒有可匯入的有效資料。'}
+            </p>
+
+            <div className="flex justify-end space-x-3 pt-2">
+                <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg">取消</button>
+                <button 
+                    type="button" 
+                    onClick={() => onConfirm(importType, success)} 
+                    className="px-5 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover disabled:bg-gray-400"
+                    disabled={success.length === 0}
+                >
+                    確認匯入
+                </button>
+            </div>
+        </div>
+    );
+};

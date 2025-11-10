@@ -14,6 +14,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { HistoricalPricesPage } from './pages/HistoricalPricesPage';
 import { ModalContainer, ModalState } from './components/modals';
 import { ScrollToTopButton } from './components/common';
+import { ParsedResult } from './utils/parser';
 
 const pageTitles: { [key in Page]: string } = {
   DASHBOARD: '總覽',
@@ -389,6 +390,58 @@ const App: React.FC = () => {
     alert('資料已成功匯入！');
   };
 
+  const handleBulkImport = useCallback((type: 'transactions' | 'dividends' | 'donations' | 'prices', data: ParsedResult<any>['success']) => {
+    if (data.length === 0) {
+      setModal(null);
+      return;
+    }
+
+    if (type === 'transactions') {
+      setStocks(prevStocks => {
+        const newStocks = [...prevStocks];
+        const stocksMap = new Map(newStocks.map(s => [s.symbol, s]));
+
+        data.forEach((tx: Omit<Transaction, 'id'> & { symbol: string }) => {
+          if (stocksMap.has(tx.symbol)) {
+            const stock = stocksMap.get(tx.symbol)!;
+            stock.transactions.push({ ...tx, id: crypto.randomUUID() });
+          } else {
+            const newStock: Stock = {
+              symbol: tx.symbol,
+              name: stockMaster[tx.symbol] || tx.symbol,
+              currentPrice: tx.price,
+              transactions: [{ ...tx, id: crypto.randomUUID() }],
+            };
+            stocksMap.set(tx.symbol, newStock);
+            newStocks.push(newStock);
+          }
+        });
+        return Array.from(stocksMap.values());
+      });
+    } else if (type === 'dividends') {
+      const newDividends: Dividend[] = data.map(d => ({ ...d, id: crypto.randomUUID() }));
+      setDividends(prev => [...prev, ...newDividends]);
+    } else if (type === 'donations') {
+      const newDonations: Donation[] = data.map(d => ({ ...d, id: crypto.randomUUID() }));
+      setDonations(prev => [...prev, ...newDonations]);
+    } else if (type === 'prices') {
+        setHistoricalPrices(prevPrices => {
+            const pricesMap = new Map(prevPrices.map(p => [p.stockSymbol, p.prices]));
+            data.forEach((priceEntry: { symbol: string; yearMonth: string; price: number }) => {
+                if (!pricesMap.has(priceEntry.symbol)) {
+                    pricesMap.set(priceEntry.symbol, {});
+                }
+                const stockPrices = pricesMap.get(priceEntry.symbol)!;
+                stockPrices[priceEntry.yearMonth] = priceEntry.price;
+            });
+            return Array.from(pricesMap.entries()).map(([stockSymbol, prices]) => ({ stockSymbol, prices }));
+        });
+    }
+
+    setModal(null);
+    alert('資料批次匯入成功！');
+  }, []);
+
   const renderPage = () => {
     switch (page) {
       case 'DASHBOARD':
@@ -450,7 +503,6 @@ const App: React.FC = () => {
                     settings={settings} 
                     onBuy={handleBuyStock} 
                     selectedGroups={selectedHistoryGroups} 
-                    // FIX: Pass the correct handler `toggleHistoryGroupSelection` for the `toggleGroupSelection` prop.
                     toggleGroupSelection={toggleHistoryGroupSelection} 
                     clearSelection={() => setSelectedHistoryGroups(new Set())} 
                     deleteSelected={handleDeleteSelectedHistoryGroups} 
@@ -468,7 +520,7 @@ const App: React.FC = () => {
                       onSave={setHistoricalPrices}
                   />;
       case 'SETTINGS':
-        return <SettingsPage onExport={handleExportData} onImport={handleImportData} openModal={setModal} />;
+        return <SettingsPage onExport={handleExportData} onImport={handleImportData} openModal={setModal} onBulkImport={handleBulkImport} />;
       default:
         return <div className="p-8 text-center text-light-text/70 dark:text-dark-text/70">頁面開發中...</div>;
     }
@@ -485,7 +537,7 @@ const App: React.FC = () => {
           <BottomNav setPage={setPage} currentPage={page} />
           {isScrolled && <ScrollToTopButton mainRef={mainContentRef} />}
       </div>
-      {modal && <ModalContainer modal={modal} closeModal={() => setModal(null)} onSaveTransaction={handleSaveTransaction} onSaveDividend={handleSaveDividend} onSaveDonation={handleSaveDonation} stocks={stocks} settings={settings} />}
+      {modal && <ModalContainer modal={modal} closeModal={() => setModal(null)} onSaveTransaction={handleSaveTransaction} onSaveDividend={handleSaveDividend} onSaveDonation={handleSaveDonation} onBulkImport={handleBulkImport} stocks={stocks} settings={settings} historicalPrices={historicalPrices} />}
     </div>
   );
 };
