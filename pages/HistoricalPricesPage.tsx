@@ -1,25 +1,27 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Stock, HistoricalPrice } from '../types';
+import { ChevronDownIcon, ChevronUpIcon } from '../components/Icons';
+import { calculateStockFinancials } from '../utils/calculations';
 
-interface HistoricalPricesPageProps {
-  stocks: Stock[];
-  historicalPrices: HistoricalPrice[];
-  onSave: React.Dispatch<React.SetStateAction<HistoricalPrice[]>>;
-}
-
-export const HistoricalPricesPage: React.FC<HistoricalPricesPageProps> = ({ stocks, historicalPrices, onSave }) => {
-  const [selectedSymbol, setSelectedSymbol] = useState<string>('');
-  const [prices, setPrices] = useState<{ [key: string]: string }>({});
-
-  const { monthInputs } = useMemo(() => {
-    if (!selectedSymbol) return { monthInputs: [] };
+// Helper to determine the months a stock was held
+const getMonthInputsForStock = (stock: Stock): string[] => {
+    if (!stock || stock.transactions.length === 0) return [];
     
-    const stock = stocks.find(s => s.symbol === selectedSymbol);
-    if (!stock || stock.transactions.length === 0) return { monthInputs: [] };
+    const sortedTransactions = [...stock.transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const minDate = new Date(sortedTransactions[0].date);
+    
+    const { currentShares } = calculateStockFinancials(stock);
+    let maxDate: Date;
 
-    const dates = stock.transactions.map(t => new Date(t.date));
-    const minDate = new Date(Math.min.apply(null, dates as any));
-    const maxDate = new Date(); 
+    if (currentShares > 0) {
+        maxDate = new Date(); // Still holding, go up to current month
+    } else {
+        const lastTxDate = new Date(sortedTransactions[sortedTransactions.length - 1].date);
+        // Per user request, input until the month *before* the final sell-off.
+        // new Date(2025, 0) is Jan 2025. getMonth() is 0. 0 - 1 = -1.
+        // new Date(2025, -1, 1) correctly resolves to Dec 1, 2024.
+        maxDate = new Date(lastTxDate.getFullYear(), lastTxDate.getMonth() - 1, 1);
+    }
 
     const months: string[] = [];
     let currentDate = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
@@ -30,113 +32,156 @@ export const HistoricalPricesPage: React.FC<HistoricalPricesPageProps> = ({ stoc
         months.push(`${year}-${month}`);
         currentDate.setMonth(currentDate.getMonth() + 1);
     }
+    
+    return months.reverse(); // Show most recent months first
+};
 
-    return { monthInputs: months.reverse() };
-  }, [selectedSymbol, stocks]);
+// --- Child Component for editing a single stock's prices ---
+interface StockPriceEditorProps {
+    stock: Stock;
+    prices: { [key: string]: string };
+    onPriceChange: (yearMonth: string, value: string) => void;
+}
+
+const StockPriceEditor: React.FC<StockPriceEditorProps> = ({ stock, prices, onPriceChange }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const monthInputs = useMemo(() => getMonthInputsForStock(stock), [stock]);
+    
+    if (monthInputs.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="bg-light-bg dark:bg-dark-bg rounded-lg">
+            <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full flex justify-between items-center p-4 font-semibold text-lg text-left"
+                aria-expanded={isExpanded}
+                aria-controls={`collapsible-content-${stock.symbol}`}
+            >
+                <span>{stock.symbol} {stock.name}</span>
+                {isExpanded ? <ChevronUpIcon className="h-6 w-6"/> : <ChevronDownIcon className="h-6 w-6"/>}
+            </button>
+            {isExpanded && (
+                <div id={`collapsible-content-${stock.symbol}`} className="p-4 border-t border-light-border dark:border-dark-border">
+                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        {monthInputs.map(month => (
+                          <div key={month} className="grid grid-cols-2 items-center gap-4">
+                            <label htmlFor={`price-${stock.symbol}-${month}`} className="font-medium text-light-text dark:text-dark-text">{month}</label>
+                            <input
+                              id={`price-${stock.symbol}-${month}`}
+                              type="number"
+                              step="any"
+                              placeholder="月底價格"
+                              value={prices[month] || ''}
+                              onChange={e => onPriceChange(month, e.target.value)}
+                              className="w-full p-2 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border focus:ring-primary focus:border-primary"
+                              aria-label={`${stock.symbol} ${month} 價格`}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// --- Main Page Component ---
+export const HistoricalPricesPage: React.FC<{
+  stocks: Stock[];
+  historicalPrices: HistoricalPrice[];
+  onSave: React.Dispatch<React.SetStateAction<HistoricalPrice[]>>;
+}> = ({ stocks, historicalPrices, onSave }) => {
+  
+  const [allPrices, setAllPrices] = useState<{ [symbol: string]: { [yearMonth: string]: string } }>({});
 
   useEffect(() => {
-    if (selectedSymbol) {
-        const existingData = historicalPrices.find(hp => hp.stockSymbol === selectedSymbol);
-        const initialPrices: { [key: string]: string } = {};
-        if (existingData) {
-            for (const [key, value] of Object.entries(existingData.prices)) {
-                initialPrices[key] = String(value);
+    const initialPrices: typeof allPrices = {};
+    historicalPrices.forEach(hp => {
+        initialPrices[hp.stockSymbol] = {};
+        for (const [key, value] of Object.entries(hp.prices)) {
+            initialPrices[hp.stockSymbol][key] = String(value);
+        }
+    });
+    setAllPrices(initialPrices);
+  }, [historicalPrices]);
+
+  const handlePriceChange = useCallback((symbol: string, yearMonth: string, value: string) => {
+    setAllPrices(prev => ({
+        ...prev,
+        [symbol]: {
+            ...(prev[symbol] || {}),
+            [yearMonth]: value
+        }
+    }));
+  }, []);
+  
+  const handleSave = useCallback(() => {
+    const updatedHistoricalPrices: HistoricalPrice[] = [];
+    
+    // Convert the local state object back into the array format required by the parent
+    for (const symbol in allPrices) {
+        const pricesForSymbol = allPrices[symbol];
+        const newPrices: { [key: string]: number } = {};
+        
+        for (const [key, value] of Object.entries(pricesForSymbol)) {
+            const stringValue = String(value);
+            const numValue = parseFloat(stringValue);
+            if (!isNaN(numValue) && stringValue.trim() !== '') {
+                newPrices[key] = numValue;
             }
         }
-        setPrices(initialPrices);
-    } else {
-        setPrices({});
-    }
-  }, [selectedSymbol, historicalPrices]);
-
-  const handlePriceChange = useCallback((yearMonth: string, value: string) => {
-    setPrices(prev => ({ ...prev, [yearMonth]: value }));
-  }, []);
-
-  const handleSave = useCallback(() => {
-    if (!selectedSymbol) return;
-
-    const newPrices: { [key: string]: number } = {};
-    // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
-    // FIX: Property 'trim' does not exist on type 'unknown'.
-    // `Object.entries` can return a value of type `unknown`, so we cast it to a string.
-    for (const [key, value] of Object.entries(prices)) {
-        const stringValue = String(value);
-        const numValue = parseFloat(stringValue);
-        if (!isNaN(numValue) && stringValue.trim() !== '') {
-            newPrices[key] = numValue;
+        
+        if (Object.keys(newPrices).length > 0) {
+            updatedHistoricalPrices.push({ stockSymbol: symbol, prices: newPrices });
         }
     }
     
-    onSave(prev => {
-        const existingIndex = prev.findIndex(hp => hp.stockSymbol === selectedSymbol);
-        if (existingIndex > -1) {
-            const updated = [...prev];
-            updated[existingIndex] = { ...updated[existingIndex], prices: newPrices };
-            return updated;
-        } else {
-            return [...prev, { stockSymbol: selectedSymbol, prices: newPrices }];
-        }
-    });
-    alert('歷史股價已儲存！');
-  }, [prices, selectedSymbol, onSave]);
+    onSave(updatedHistoricalPrices);
+    alert('所有歷史股價已儲存！');
+  }, [allPrices, onSave]);
+  
+  const relevantStocks = useMemo(() => {
+      return stocks.filter(s => s.transactions.length > 0);
+  }, [stocks]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold hidden md:block">歷史股價</h1>
       
       <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md max-w-2xl mx-auto">
-        <h2 className="text-xl font-semibold mb-4">選擇股票</h2>
-        <p className="text-sm text-light-text/80 dark:text-dark-text/80 mb-4">
-            選擇一檔股票來手動記錄其每個月底的收盤價。這些價格將用於儀表板上的「累積報酬 vs 成本」圖表，以提供更精確的歷史價值分析。
+        <p className="text-light-text/80 dark:text-dark-text/80 mb-4">
+            在此手動記錄您持有股票期間，每個月底的收盤價。這些價格將用於儀表板上的「累積報酬 vs 成本」圖表，以提供更精確的歷史價值分析。
         </p>
-        <select 
-          value={selectedSymbol} 
-          onChange={e => setSelectedSymbol(e.target.value)}
-          className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border"
-          aria-label="選擇股票"
-        >
-          <option value="">-- 選擇一檔股票 --</option>
-          {stocks.map(s => <option key={s.symbol} value={s.symbol}>{s.symbol} {s.name}</option>)}
-        </select>
-      </div>
-
-      {selectedSymbol && monthInputs.length > 0 && (
-        <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md max-w-2xl mx-auto">
-          <h2 className="text-xl font-semibold mb-4">編輯 {selectedSymbol} 月底收盤價</h2>
-          <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-            {monthInputs.map(month => (
-              <div key={month} className="grid grid-cols-2 items-center gap-4">
-                <label htmlFor={`price-${month}`} className="font-medium text-light-text dark:text-dark-text">{month}</label>
-                <input
-                  id={`price-${month}`}
-                  type="number"
-                  step="any"
-                  placeholder="月底價格"
-                  value={prices[month] || ''}
-                  onChange={e => handlePriceChange(month, e.target.value)}
-                  className="w-full p-2 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border focus:ring-primary focus:border-primary"
-                  aria-label={`${month} 價格`}
-                />
+        <div className="space-y-4">
+            {relevantStocks.length > 0 ? (
+                relevantStocks.map(stock => (
+                    <StockPriceEditor
+                        key={stock.symbol}
+                        stock={stock}
+                        prices={allPrices[stock.symbol] || {}}
+                        onPriceChange={(yearMonth, value) => handlePriceChange(stock.symbol, yearMonth, value)}
+                    />
+                ))
+            ) : (
+                <p className="text-center text-light-text/70 dark:text-dark-text/70 py-4">
+                    您目前沒有任何持股紀錄。
+                </p>
+            )}
+        </div>
+        
+        {relevantStocks.length > 0 && (
+             <div className="mt-6 flex justify-end">
+                <button 
+                  onClick={handleSave} 
+                  className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold py-2 px-6 rounded-lg transition-colors"
+                >
+                  儲存所有變更
+                </button>
               </div>
-            ))}
-          </div>
-          <div className="mt-6 flex justify-end">
-            <button 
-              onClick={handleSave} 
-              className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              儲存變更
-            </button>
-          </div>
-        </div>
-      )}
-
-      {selectedSymbol && stocks.find(s => s.symbol === selectedSymbol) && monthInputs.length === 0 && (
-        <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md max-w-2xl mx-auto text-center">
-            <p className="text-light-text/80 dark:text-dark-text/80">找不到 {selectedSymbol} 的交易紀錄來決定持有期間。請先新增一筆交易。</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
