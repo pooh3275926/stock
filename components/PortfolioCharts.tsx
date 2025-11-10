@@ -78,8 +78,9 @@ interface ContributionChartData {
 interface ProfitLossBarChartProps {
     data: ContributionChartData[];
     theme: 'light' | 'dark';
+    unit?: 'currency' | 'percent';
 }
-export const ProfitLossBarChart: React.FC<ProfitLossBarChartProps> = ({ data, theme }) => {
+export const ProfitLossBarChart: React.FC<ProfitLossBarChartProps> = ({ data, theme, unit = 'currency' }) => {
     if (!data || data.length === 0) {
         return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
     }
@@ -98,13 +99,13 @@ export const ProfitLossBarChart: React.FC<ProfitLossBarChartProps> = ({ data, th
         <ResponsiveContainer width="100%" height={200}>
             <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis type="number" stroke={axisColor} tickFormatter={(value) => value.toLocaleString()} />
+                <XAxis type="number" stroke={axisColor} tickFormatter={(value) => unit === 'percent' ? `${value}%` : value.toLocaleString()} />
                 <YAxis type="category" dataKey="name" stroke={axisColor} width={60} />
                 <Tooltip
                     contentStyle={tooltipStyle}
                     labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
                     itemStyle={{ color: theme === 'dark' ? '#D4C3A9' : '#6B6358' }}
-                    formatter={(value: number) => formatCurrency(value, 'TWD')}
+                    formatter={(value: number) => unit === 'percent' ? `${value.toFixed(2)}%` : formatCurrency(value, 'TWD')}
                 />
                 <Bar dataKey="value" name="貢獻度">
                     {data.map((entry, index) => (
