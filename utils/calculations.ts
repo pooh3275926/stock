@@ -30,6 +30,36 @@ export const getLatestHistoricalPrice = (symbol: string, historicalPrices: Histo
     return latestMonth ? stockPrices.prices[latestMonth] : null;
 };
 
+/**
+ * Gets the historical price for a stock as of a specific month in a year.
+ * It searches backwards from the given month to the beginning of the year.
+ * @param symbol The stock symbol.
+ * @param year The target year.
+ * @param month The target month (1-12).
+ * @param historicalPrices The array of all historical price records.
+ * @returns The price as a number, or null if not found for that year.
+ */
+export const getHistoricalPriceAsOf = (
+    symbol: string, 
+    year: number, 
+    month: number, // 1-12
+    historicalPrices: HistoricalPrice[]
+): number | null => {
+    const stockPrices = historicalPrices.find(hp => hp.stockSymbol === symbol);
+    if (!stockPrices?.prices) {
+        return null;
+    }
+
+    for (let m = month; m >= 1; m--) {
+        const yearMonth = `${year}-${String(m).padStart(2, '0')}`;
+        if (stockPrices.prices[yearMonth] !== undefined) {
+            return stockPrices.prices[yearMonth];
+        }
+    }
+
+    return null; // No price found for that year up to the specified month
+};
+
 
 // --- Calculation Helpers ---
 export const calculateStockFinancials = (stock: Stock) => {
