@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { KpiCard } from '../components/KpiCard';
-import { PortfolioDonutChart, DividendBarChart, ProfitLossBarChart, AdvancedMonthlyDividendChart, MonthlyRealizedPnlChart, CumulativeReturnChart } from '../components/PortfolioCharts';
+import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart } from '../components/PortfolioCharts';
 import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice, getHistoricalPriceAsOf } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
+import { stockDividendFrequency } from '../utils/data';
 
 
 interface DashboardPageProps {
@@ -25,20 +26,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
   const dashboardData = useMemo(() => {
     const symbolsSet = new Set(filteredSymbols);
     const relevantStocksBase = stocks.filter(s => symbolsSet.has(s.symbol));
-    const relevantDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
+    const relevantDividendsBase = dividends.filter(d => symbolsSet.has(d.stockSymbol));
 
-    // --- Calculation for "All Time" ---
+    let activeStocksForCharts: Stock[];
+    let dividendsForChart: Dividend[];
+    let totalMarketValue, totalCurrentCost, totalRealizedPnl, unrealizedPnl, totalDividends;
+
     if (selectedYear === 'all') {
-      // For "all time", we use the absolute latest historical price available for each stock.
       const relevantStocks = relevantStocksBase.map(stock => {
         const latestPrice = getLatestHistoricalPrice(stock.symbol, historicalPrices);
         return { ...stock, currentPrice: latestPrice !== null ? latestPrice : stock.currentPrice };
       });
 
-      let totalMarketValue = 0;
-      let totalCurrentCost = 0;
-      let totalRealizedPnl = 0;
-      const activeStocksForCharts = [];
+      activeStocksForCharts = [];
+      totalMarketValue = 0;
+      totalCurrentCost = 0;
+      totalRealizedPnl = 0;
 
       for (const stock of relevantStocks) {
         const financials = calculateStockFinancials(stock);
@@ -50,80 +53,98 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
         totalRealizedPnl += financials.realizedPnl;
       }
       
-      const unrealizedPnl = totalMarketValue - totalCurrentCost;
-      const totalDividends = relevantDividends.reduce((sum, d) => sum + d.amount, 0);
-      const totalReturn = unrealizedPnl + totalRealizedPnl + totalDividends;
-      const totalReturnRate = totalCurrentCost > 0 ? (totalReturn / totalCurrentCost) * 100 : 0;
-      const dividendYield = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) * 100 : 0;
-      
-      return {
-        stats: { totalMarketValue, totalCost: totalCurrentCost, unrealizedPnl, totalRealizedPnl, totalDividends, totalReturn, totalReturnRate, dividendYield },
-        activeStocksForCharts,
-        dividendsForChart: relevantDividends,
-        stocksForPnlCharts: relevantStocks,
-      };
-    }
+      unrealizedPnl = totalMarketValue - totalCurrentCost;
+      dividendsForChart = relevantDividendsBase;
+      totalDividends = dividendsForChart.reduce((sum, d) => sum + d.amount, 0);
 
-    // --- Calculation for a specific selected year ---
-    const endDate = new Date(selectedYear, 11, 31, 23, 59, 59);
-    if (new Date().getFullYear() === selectedYear) {
-      const now = new Date();
-      if (now < endDate) {
-        endDate.setTime(now.getTime());
+    } else {
+      const endDate = new Date(selectedYear, 11, 31, 23, 59, 59);
+      if (new Date().getFullYear() === selectedYear) {
+          const now = new Date();
+          if (now < endDate) endDate.setTime(now.getTime());
       }
-    }
     
-    let totalMarketValueAtYearEnd = 0;
-    let totalCostAtYearEnd = 0;
-    let totalRealizedPnlInYear = 0;
-    const activeStocksAtYearEnd = [];
-    const stocksWithSellInYear = [];
+      totalMarketValue = 0;
+      totalCurrentCost = 0;
+      totalRealizedPnl = 0;
+      activeStocksForCharts = [];
 
-    for (const stock of relevantStocksBase) {
-      // Get price as of Dec of the selected year. Fallback to user-entered current price.
-      const priceForYear = getHistoricalPriceAsOf(stock.symbol, selectedYear, 12, historicalPrices);
-      
-      // For holdings stats: analyze state at the end of the year with the correct historical price
-      const stockForHoldingsCalc = {
-        ...stock,
-        currentPrice: priceForYear !== null ? priceForYear : stock.currentPrice,
-        transactions: stock.transactions.filter(t => new Date(t.date) <= endDate),
-      };
+      for (const stock of relevantStocksBase) {
+        const priceForYear = getHistoricalPriceAsOf(stock.symbol, selectedYear, 12, historicalPrices);
+        const stockForHoldingsCalc = {
+          ...stock,
+          currentPrice: priceForYear !== null ? priceForYear : stock.currentPrice,
+          transactions: stock.transactions.filter(t => new Date(t.date) <= endDate),
+        };
 
-      if (stockForHoldingsCalc.transactions.length > 0) {
-        const financials = calculateStockFinancials(stockForHoldingsCalc);
-        if (financials.currentShares > 0) {
-          totalMarketValueAtYearEnd += financials.marketValue;
-          totalCostAtYearEnd += financials.totalCost;
-          activeStocksAtYearEnd.push(stockForHoldingsCalc);
+        if (stockForHoldingsCalc.transactions.length > 0) {
+          const financials = calculateStockFinancials(stockForHoldingsCalc);
+          if (financials.currentShares > 0) {
+            totalMarketValue += financials.marketValue;
+            totalCurrentCost += financials.totalCost;
+            activeStocksForCharts.push(stockForHoldingsCalc);
+          }
         }
+        
+        const fullHistoryFinancials = calculateStockFinancials(stock);
+        const sellsInYear = fullHistoryFinancials.sellDetails.filter(d => new Date(d.transaction.date).getFullYear() === selectedYear);
+        totalRealizedPnl += sellsInYear.reduce((sum, d) => sum + d.realizedPnl, 0);
       }
-
-      // For realized P&L: analyze sales within the year, based on full history for cost basis
-      // Note: This calculation is independent of currentPrice, so we use the original full-history stock object
-      const fullHistoryFinancials = calculateStockFinancials(stock);
-      const sellsInYear = fullHistoryFinancials.sellDetails.filter(d => new Date(d.transaction.date).getFullYear() === selectedYear);
-      if (sellsInYear.length > 0) {
-        // Use the original stock object here, as it contains all transactions
-        stocksWithSellInYear.push(stock); 
-        totalRealizedPnlInYear += sellsInYear.reduce((sum, d) => sum + d.realizedPnl, 0);
-      }
+    
+      unrealizedPnl = totalMarketValue - totalCurrentCost;
+      dividendsForChart = relevantDividendsBase.filter(d => new Date(d.date).getFullYear() === selectedYear);
+      totalDividends = dividendsForChart.reduce((sum, d) => sum + d.amount, 0);
     }
     
-    const unrealizedPnlAtYearEnd = totalMarketValueAtYearEnd - totalCostAtYearEnd;
-    const dividendsInYear = relevantDividends.filter(d => new Date(d.date).getFullYear() === selectedYear);
-    const totalDividendsInYear = dividendsInYear.reduce((sum, d) => sum + d.amount, 0);
-    const totalReturn = unrealizedPnlAtYearEnd + totalRealizedPnlInYear + totalDividendsInYear;
-    const totalReturnRate = totalCostAtYearEnd > 0 ? (totalReturn / totalCostAtYearEnd) * 100 : 0;
-    const dividendYield = totalCostAtYearEnd > 0 ? (totalDividendsInYear / totalCostAtYearEnd) * 100 : 0;
-    
-    return {
-      stats: { totalMarketValue: totalMarketValueAtYearEnd, totalCost: totalCostAtYearEnd, unrealizedPnl: unrealizedPnlAtYearEnd, totalRealizedPnl: totalRealizedPnlInYear, totalDividends: totalDividendsInYear, totalReturn, totalReturnRate, dividendYield },
-      activeStocksForCharts: activeStocksAtYearEnd,
-      dividendsForChart: dividendsInYear,
-      stocksForPnlCharts: stocksWithSellInYear,
-    };
+    // --- Common Calculations for KPIs and Charts ---
+    const totalReturn = unrealizedPnl + totalRealizedPnl + totalDividends;
+    const totalReturnRate = totalCurrentCost > 0 ? (totalReturn / totalCurrentCost) * 100 : 0;
+    const dividendYield = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) * 100 : 0;
 
+    const contributionData = activeStocksForCharts.map(stock => {
+        const financials = calculateStockFinancials(stock);
+        const stockDividendsInPeriod = dividendsForChart.filter(d => d.stockSymbol === stock.symbol);
+        const totalDividendsForStock = stockDividendsInPeriod.reduce((sum, d) => sum + d.amount, 0);
+        
+        const totalReturnWithDividends = financials.unrealizedPnl + totalDividendsForStock;
+
+        const annualizedYields = stockDividendsInPeriod.map(d => {
+            const sharesHeld = d.sharesHeld || 0;
+            if (sharesHeld === 0 || financials.avgCost === 0) return 0;
+            const proportionalCost = sharesHeld * financials.avgCost;
+            if (proportionalCost === 0) return 0;
+            const individualYieldRate = (d.amount / proportionalCost) * 100;
+            const frequency = stockDividendFrequency[stock.symbol] || 1;
+            return individualYieldRate * frequency;
+        });
+        const avgAnnualizedYield = annualizedYields.length > 0
+            ? annualizedYields.reduce((sum, y) => sum + y, 0) / annualizedYields.length
+            : 0;
+
+        return {
+            symbol: stock.symbol,
+            unrealizedPnl: financials.unrealizedPnl,
+            totalReturnWithDividends,
+            avgAnnualizedYield,
+        };
+    });
+
+    const topPnl = [...contributionData].sort((a, b) => b.unrealizedPnl - a.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
+    const bottomPnl = [...contributionData].filter(d => d.unrealizedPnl < 0).sort((a, b) => a.unrealizedPnl - b.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
+    
+    const topTotalReturn = [...contributionData].sort((a, b) => b.totalReturnWithDividends - a.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
+    const bottomTotalReturn = [...contributionData].filter(d => d.totalReturnWithDividends < 0).sort((a, b) => a.totalReturnWithDividends - b.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
+
+    const topYield = [...contributionData].sort((a, b) => b.avgAnnualizedYield - a.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
+    const bottomYield = [...contributionData].filter(d => d.avgAnnualizedYield > 0).sort((a, b) => a.avgAnnualizedYield - b.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
+
+    return {
+      stats: { totalMarketValue, totalCost: totalCurrentCost, unrealizedPnl, totalRealizedPnl, totalDividends, totalReturn, totalReturnRate, dividendYield },
+      dividendsForChart,
+      topPnl, bottomPnl,
+      topTotalReturn, bottomTotalReturn,
+      topYield, bottomYield,
+    };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
   return (
@@ -151,24 +172,34 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
         <KpiCard title="累計股利" value={formatCurrency(dashboardData.stats.totalDividends, settings.currency)} change={dashboardData.stats.dividendYield} changeType="PERCENT"/>
         <KpiCard title="總報酬率" value={formatCurrency(dashboardData.stats.totalReturn, settings.currency)} change={dashboardData.stats.totalReturnRate} changeType="PERCENT"/>
       </div>
+      
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">投資組合分佈</h2>
-            <PortfolioDonutChart stocks={dashboardData.activeStocksForCharts} theme={theme}/>
+            <h2 className="text-xl font-semibold mb-4">最佳未實現損益貢獻 Top 3</h2>
+            <ProfitLossBarChart data={dashboardData.topPnl} theme={theme}/>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">未實現損益貢獻</h2>
-            <ProfitLossBarChart stocks={dashboardData.activeStocksForCharts} theme={theme}/>
+            <h2 className="text-xl font-semibold mb-4">最差未實現損益貢獻 Top 3</h2>
+            <ProfitLossBarChart data={dashboardData.bottomPnl} theme={theme}/>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">累積報酬 vs 成本</h2>
-            <CumulativeReturnChart stocks={dashboardData.activeStocksForCharts} theme={theme} historicalPrices={historicalPrices} />
+            <h2 className="text-xl font-semibold mb-4">最佳含息總報酬貢獻 Top 3</h2>
+            <ProfitLossBarChart data={dashboardData.topTotalReturn} theme={theme}/>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">月已實現損益</h2>
-            <MonthlyRealizedPnlChart stocks={dashboardData.stocksForPnlCharts} theme={theme} />
+            <h2 className="text-xl font-semibold mb-4">最差含息總報酬貢獻 Top 3</h2>
+            <ProfitLossBarChart data={dashboardData.bottomTotalReturn} theme={theme}/>
+        </div>
+         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-4">最佳年化殖利率貢獻 Top 3</h2>
+            <YieldContributionChart data={dashboardData.topYield} theme={theme}/>
+        </div>
+        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-4">最差年化殖利率貢獻 Top 3</h2>
+            <YieldContributionChart data={dashboardData.bottomYield} theme={theme}/>
         </div>
       </div>
+
        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-center">年度股利收入</h2>
             <AdvancedMonthlyDividendChart dividends={dashboardData.dividendsForChart} theme={theme} />
