@@ -107,6 +107,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
         const totalDividendsForStock = stockDividendsInPeriod.reduce((sum, d) => sum + d.amount, 0);
         
         const totalReturnWithDividends = financials.unrealizedPnl + totalDividendsForStock;
+        const totalReturnWithDividendsPercent = financials.totalCost > 0 ? (totalReturnWithDividends / financials.totalCost) * 100 : 0;
 
         const annualizedYields = stockDividendsInPeriod.map(d => {
             const sharesHeld = d.sharesHeld || 0;
@@ -123,17 +124,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
 
         return {
             symbol: stock.symbol,
-            unrealizedPnl: financials.unrealizedPnl,
-            totalReturnWithDividends,
+            unrealizedPnlPercent: financials.unrealizedPnlPercent,
+            totalReturnWithDividendsPercent,
             avgAnnualizedYield,
         };
     });
 
-    const topPnl = [...contributionData].sort((a, b) => b.unrealizedPnl - a.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
-    const bottomPnl = [...contributionData].sort((a, b) => a.unrealizedPnl - b.unrealizedPnl).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnl }));
+    const topPnl = [...contributionData].sort((a, b) => b.unrealizedPnlPercent - a.unrealizedPnlPercent).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnlPercent }));
+    const bottomPnl = [...contributionData].sort((a, b) => a.unrealizedPnlPercent - b.unrealizedPnlPercent).slice(0, 3).map(d => ({ name: d.symbol, value: d.unrealizedPnlPercent }));
     
-    const topTotalReturn = [...contributionData].sort((a, b) => b.totalReturnWithDividends - a.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
-    const bottomTotalReturn = [...contributionData].sort((a, b) => a.totalReturnWithDividends - b.totalReturnWithDividends).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividends }));
+    const topTotalReturn = [...contributionData].sort((a, b) => b.totalReturnWithDividendsPercent - a.totalReturnWithDividendsPercent).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividendsPercent }));
+    const bottomTotalReturn = [...contributionData].sort((a, b) => a.totalReturnWithDividendsPercent - b.totalReturnWithDividendsPercent).slice(0, 3).map(d => ({ name: d.symbol, value: d.totalReturnWithDividendsPercent }));
 
     const topYield = [...contributionData].sort((a, b) => b.avgAnnualizedYield - a.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
     const bottomYield = [...contributionData].filter(d => d.avgAnnualizedYield > 0).sort((a, b) => a.avgAnnualizedYield - b.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
@@ -176,19 +177,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">最佳未實現損益貢獻 Top 3</h2>
-            <ProfitLossBarChart data={dashboardData.topPnl} theme={theme}/>
+            <ProfitLossBarChart data={dashboardData.topPnl} theme={theme} unit="percent"/>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">最差未實現損益貢獻 Top 3</h2>
-            <ProfitLossBarChart data={dashboardData.bottomPnl} theme={theme}/>
+            <ProfitLossBarChart data={dashboardData.bottomPnl} theme={theme} unit="percent"/>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">最佳含息總報酬貢獻 Top 3</h2>
-            <ProfitLossBarChart data={dashboardData.topTotalReturn} theme={theme}/>
+            <ProfitLossBarChart data={dashboardData.topTotalReturn} theme={theme} unit="percent"/>
         </div>
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">最差含息總報酬貢獻 Top 3</h2>
-            <ProfitLossBarChart data={dashboardData.bottomTotalReturn} theme={theme}/>
+            <ProfitLossBarChart data={dashboardData.bottomTotalReturn} theme={theme} unit="percent"/>
         </div>
          <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4">最佳年化殖利率貢獻 Top 3</h2>
