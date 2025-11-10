@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { PortfolioDonutChart, DividendBarChart, ProfitLossBarChart, AdvancedMonthlyDividendChart, MonthlyRealizedPnlChart, CumulativeReturnChart } from '../components/PortfolioCharts';
 import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
-import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice } from '../utils/calculations';
+import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice, getHistoricalPriceAsOf } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
 
 
@@ -22,23 +22,19 @@ interface DashboardPageProps {
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
 
-  const stocksWithLatestPrice = useMemo(() => {
-    return stocks.map(stock => {
-      const latestPrice = getLatestHistoricalPrice(stock.symbol, historicalPrices);
-      if (latestPrice !== null) {
-        return { ...stock, currentPrice: latestPrice };
-      }
-      return stock;
-    });
-  }, [stocks, historicalPrices]);
-
   const dashboardData = useMemo(() => {
     const symbolsSet = new Set(filteredSymbols);
-    const relevantStocks = stocksWithLatestPrice.filter(s => symbolsSet.has(s.symbol));
+    const relevantStocksBase = stocks.filter(s => symbolsSet.has(s.symbol));
     const relevantDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
 
     // --- Calculation for "All Time" ---
     if (selectedYear === 'all') {
+      // For "all time", we use the absolute latest historical price available for each stock.
+      const relevantStocks = relevantStocksBase.map(stock => {
+        const latestPrice = getLatestHistoricalPrice(stock.symbol, historicalPrices);
+        return { ...stock, currentPrice: latestPrice !== null ? latestPrice : stock.currentPrice };
+      });
+
       let totalMarketValue = 0;
       let totalCurrentCost = 0;
       let totalRealizedPnl = 0;
@@ -61,16 +57,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       const dividendYield = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) * 100 : 0;
       
       return {
-        stats: {
-          totalMarketValue,
-          totalCost: totalCurrentCost,
-          unrealizedPnl,
-          totalRealizedPnl,
-          totalDividends,
-          totalReturn,
-          totalReturnRate,
-          dividendYield,
-        },
+        stats: { totalMarketValue, totalCost: totalCurrentCost, unrealizedPnl, totalRealizedPnl, totalDividends, totalReturn, totalReturnRate, dividendYield },
         activeStocksForCharts,
         dividendsForChart: relevantDividends,
         stocksForPnlCharts: relevantStocks,
@@ -92,26 +79,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const activeStocksAtYearEnd = [];
     const stocksWithSellInYear = [];
 
-    for (const stock of relevantStocks) {
-      // For holdings stats: analyze state at the end of the year
-      const stockAtYearEnd = {
+    for (const stock of relevantStocksBase) {
+      // Get price as of Dec of the selected year. Fallback to user-entered current price.
+      const priceForYear = getHistoricalPriceAsOf(stock.symbol, selectedYear, 12, historicalPrices);
+      
+      // For holdings stats: analyze state at the end of the year with the correct historical price
+      const stockForHoldingsCalc = {
         ...stock,
+        currentPrice: priceForYear !== null ? priceForYear : stock.currentPrice,
         transactions: stock.transactions.filter(t => new Date(t.date) <= endDate),
       };
-      if (stockAtYearEnd.transactions.length > 0) {
-        const financials = calculateStockFinancials(stockAtYearEnd);
+
+      if (stockForHoldingsCalc.transactions.length > 0) {
+        const financials = calculateStockFinancials(stockForHoldingsCalc);
         if (financials.currentShares > 0) {
           totalMarketValueAtYearEnd += financials.marketValue;
           totalCostAtYearEnd += financials.totalCost;
-          activeStocksAtYearEnd.push(stockAtYearEnd);
+          activeStocksAtYearEnd.push(stockForHoldingsCalc);
         }
       }
 
       // For realized P&L: analyze sales within the year, based on full history for cost basis
+      // Note: This calculation is independent of currentPrice, so we use the original full-history stock object
       const fullHistoryFinancials = calculateStockFinancials(stock);
       const sellsInYear = fullHistoryFinancials.sellDetails.filter(d => new Date(d.transaction.date).getFullYear() === selectedYear);
       if (sellsInYear.length > 0) {
-        stocksWithSellInYear.push(stock);
+        // Use the original stock object here, as it contains all transactions
+        stocksWithSellInYear.push(stock); 
         totalRealizedPnlInYear += sellsInYear.reduce((sum, d) => sum + d.realizedPnl, 0);
       }
     }
@@ -124,22 +118,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const dividendYield = totalCostAtYearEnd > 0 ? (totalDividendsInYear / totalCostAtYearEnd) * 100 : 0;
     
     return {
-      stats: {
-        totalMarketValue: totalMarketValueAtYearEnd,
-        totalCost: totalCostAtYearEnd,
-        unrealizedPnl: unrealizedPnlAtYearEnd,
-        totalRealizedPnl: totalRealizedPnlInYear,
-        totalDividends: totalDividendsInYear,
-        totalReturn,
-        totalReturnRate,
-        dividendYield,
-      },
+      stats: { totalMarketValue: totalMarketValueAtYearEnd, totalCost: totalCostAtYearEnd, unrealizedPnl: unrealizedPnlAtYearEnd, totalRealizedPnl: totalRealizedPnlInYear, totalDividends: totalDividendsInYear, totalReturn, totalReturnRate, dividendYield },
       activeStocksForCharts: activeStocksAtYearEnd,
       dividendsForChart: dividendsInYear,
       stocksForPnlCharts: stocksWithSellInYear,
     };
 
-  }, [stocksWithLatestPrice, dividends, filteredSymbols, selectedYear]);
+  }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
   return (
     <div className="space-y-8">
