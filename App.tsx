@@ -356,7 +356,18 @@ const App: React.FC = () => {
   const handleEditDonation = (donation: Donation) => setModal({type: 'DONATION_FORM', data: { mode: 'edit', donation: donation }});
 
   const handleExportData = () => {
-    const data = { stocks, dividends, donations, settings };
+    // NOTE: `stocks` contains ALL transactions (buy and sell). 
+    // The `sellHistory` key is added explicitly to the export file for user clarity,
+    // containing stocks with sell records. It's a subset of `stocks` and is not used on import.
+    const sellHistoryForExport = stocksWithSellHistory.map(({ financials, ...stock }) => stock);
+
+    const data = { 
+      stocks, 
+      dividends, 
+      donations, 
+      settings,
+      sellHistory: sellHistoryForExport,
+    };
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
     const link = document.createElement("a");
     link.href = jsonString;
