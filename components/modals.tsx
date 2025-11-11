@@ -1,18 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CloseIcon } from './Icons';
-import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice } from '../types';
+import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice, BudgetEntry } from '../types';
 import { calculateStockFinancials, getLatestHistoricalPrice } from '../utils/calculations';
 import { stockMaster } from '../utils/data';
 import { ParsedResult } from '../utils/parser';
 
-export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW';
+export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW' | 'BUDGET_ENTRY';
 export interface ModalState {
   type: ModalType;
   data?: any;
 }
 
 // --- Modal and Forms ---
-export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, onBulkImport, stocks, settings, historicalPrices }) => {
+export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; onSaveBudgetEntry: any; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, onSaveBudgetEntry, onBulkImport, stocks, settings, historicalPrices }) => {
     const renderContent = () => {
         if (!modal.type) return null;
         switch(modal.type) {
@@ -21,12 +21,14 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
             case 'DONATION_FORM': return <DonationForm onSave={handleSaveDonation} onCancel={closeModal} mode={modal.data.mode} donation={modal.data.donation} />;
             case 'DELETE_CONFIRMATION': return <DeleteConfirmation title={modal.data.title} message={modal.data.message} onConfirm={modal.data.onConfirm} onCancel={modal.data.onCancel || closeModal} />;
             case 'IMPORT_PREVIEW': return <ImportPreviewModal parsedData={modal.data.parsedData} importType={modal.data.importType} onConfirm={onBulkImport} onCancel={closeModal} />;
+            case 'BUDGET_ENTRY': return <BudgetEntryForm onSave={handleSaveBudgetEntry} onCancel={closeModal} mode={modal.data.mode} entry={modal.data.entry} />;
             default: return null;
         }
     };
     
     const handleSaveDividend = (data: Omit<Dividend, 'id'>) => onSaveDividend(data, modal.data?.dividend?.id);
     const handleSaveDonation = (data: Omit<Donation, 'id'>) => onSaveDonation(data, modal.data?.donation?.id);
+    const handleSaveBudgetEntry = (data: Omit<BudgetEntry, 'id'>) => onSaveBudgetEntry(data, modal.data?.entry?.id);
 
     if (!modal) return null;
     
@@ -159,6 +161,27 @@ const DonationForm: React.FC<{onSave: (d: Omit<Donation, 'id'>) => void; onCance
             <div className="flex justify-between items-center"><h2 className="text-xl font-bold">{mode === 'edit' ? '編輯' : '新增'}奉獻紀錄</h2><button type="button" onClick={onCancel} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg"><CloseIcon className="h-6 w-6"/></button></div>
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder="奉獻金額" value={amount} onChange={e => setAmount(e.target.value)} required />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="text" placeholder="說明" value={description} onChange={e => setDescription(e.target.value)} required />
+            <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+            <div className="flex justify-end space-x-3 pt-2"><button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg">取消</button><button type="submit" className="px-5 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover">儲存</button></div>
+        </form>
+    );
+};
+
+const BudgetEntryForm: React.FC<{onSave: (d: Omit<BudgetEntry, 'id'>) => void; onCancel: () => void; mode: 'add' | 'edit'; entry?: BudgetEntry;}> = ({ onSave, onCancel, mode, entry }) => {
+    const [type, setType] = useState<BudgetEntry['type']>(entry?.type || 'DEPOSIT');
+    const [amount, setAmount] = useState(entry?.amount.toString() || '');
+    const [date, setDate] = useState(entry?.date || new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState(entry?.description || '');
+    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave({ type, amount: parseFloat(amount), date, description }); };
+    return (
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <div className="flex justify-between items-center"><h2 className="text-xl font-bold">{mode === 'edit' ? '編輯' : '新增'}預算項目</h2><button type="button" onClick={onCancel} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg"><CloseIcon className="h-6 w-6"/></button></div>
+            <select value={type} onChange={(e) => setType(e.target.value as BudgetEntry['type'])} className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border">
+                <option value="DEPOSIT">存入 / 資金流入</option>
+                <option value="WITHDRAWAL">提出 / 資金流出</option>
+            </select>
+            <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder="金額" value={amount} onChange={e => setAmount(e.target.value)} required />
+            <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="text" placeholder="說明 (例如: 增加投資本金)" value={description} onChange={e => setDescription(e.target.value)} required />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="date" value={date} onChange={e => setDate(e.target.value)} required />
             <div className="flex justify-end space-x-3 pt-2"><button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg">取消</button><button type="submit" className="px-5 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover">儲存</button></div>
         </form>

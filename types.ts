@@ -9,7 +9,7 @@ export interface Transaction {
 }
 
 export interface Dividend {
-  id: string;
+  id:string;
   stockSymbol: string;
   amount: number;
   date: string;
@@ -26,6 +26,14 @@ export interface Stock {
 
 export interface Donation {
   id: string;
+  amount: number;
+  date: string;
+  description: string;
+}
+
+export interface BudgetEntry {
+  id: string;
+  type: 'DEPOSIT' | 'WITHDRAWAL';
   amount: number;
   date: string;
   description: string;
@@ -50,4 +58,4 @@ export interface HistoricalPrice {
   };
 }
 
-export type Page = 'DASHBOARD' | 'PORTFOLIO' | 'DIVIDENDS' | 'DONATION_FUND' | 'TRANSACTION_HISTORY' | 'HISTORICAL_PRICES' | 'SETTINGS';
+export type Page = 'DASHBOARD' | 'PORTFOLIO' | 'DIVIDENDS' | 'DONATION_FUND' | 'TRANSACTION_HISTORY' | 'HISTORICAL_PRICES' | 'SETTINGS' | 'BUDGET' | 'MORE';
