@@ -92,7 +92,8 @@ export const HistoricalPricesPage: React.FC<{
   stocks: Stock[];
   historicalPrices: HistoricalPrice[];
   onSave: React.Dispatch<React.SetStateAction<HistoricalPrice[]>>;
-}> = ({ stocks, historicalPrices, onSave }) => {
+  onOpenUpdateAllPricesModal: () => void;
+}> = ({ stocks, historicalPrices, onSave, onOpenUpdateAllPricesModal }) => {
   
   const [allPrices, setAllPrices] = useState<{ [symbol: string]: { [yearMonth: string]: string } }>({});
 
@@ -172,7 +173,13 @@ export const HistoricalPricesPage: React.FC<{
         </div>
         
         {relevantStocks.length > 0 && (
-             <div className="mt-6 flex justify-end">
+             <div className="mt-6 flex justify-end gap-4">
+                <button 
+                  onClick={onOpenUpdateAllPricesModal}
+                  className="bg-primary/80 hover:bg-primary text-primary-foreground font-bold py-2 px-6 rounded-lg transition-colors"
+                >
+                  一鍵更新股價
+                </button>
                 <button 
                   onClick={handleSave} 
                   className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold py-2 px-6 rounded-lg transition-colors"

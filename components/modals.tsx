@@ -5,14 +5,14 @@ import { calculateStockFinancials, getLatestHistoricalPrice } from '../utils/cal
 import { stockMaster } from '../utils/data';
 import { ParsedResult } from '../utils/parser';
 
-export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW' | 'BUDGET_ENTRY';
+export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW' | 'BUDGET_ENTRY' | 'UPDATE_ALL_PRICES';
 export interface ModalState {
   type: ModalType;
   data?: any;
 }
 
 // --- Modal and Forms ---
-export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; onSaveBudgetEntry: any; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, onSaveBudgetEntry, onBulkImport, stocks, settings, historicalPrices }) => {
+export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; onSaveBudgetEntry: any; onUpdateAllPrices: (prices: { [symbol: string]: number }) => void; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, onSaveBudgetEntry, onUpdateAllPrices, onBulkImport, stocks, settings, historicalPrices }) => {
     const renderContent = () => {
         if (!modal.type) return null;
         switch(modal.type) {
@@ -22,6 +22,7 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
             case 'DELETE_CONFIRMATION': return <DeleteConfirmation title={modal.data.title} message={modal.data.message} onConfirm={modal.data.onConfirm} onCancel={modal.data.onCancel || closeModal} />;
             case 'IMPORT_PREVIEW': return <ImportPreviewModal parsedData={modal.data.parsedData} importType={modal.data.importType} onConfirm={onBulkImport} onCancel={closeModal} />;
             case 'BUDGET_ENTRY': return <BudgetEntryForm onSave={handleSaveBudgetEntry} onCancel={closeModal} mode={modal.data.mode} entry={modal.data.entry} />;
+            case 'UPDATE_ALL_PRICES': return <UpdateAllPricesForm stocks={modal.data.stocks} onSave={onUpdateAllPrices} onCancel={closeModal} />;
             default: return null;
         }
     };
@@ -32,7 +33,7 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
 
     if (!modal) return null;
     
-    const isLargeModal = modal.type === 'IMPORT_PREVIEW';
+    const isLargeModal = modal.type === 'IMPORT_PREVIEW' || modal.type === 'UPDATE_ALL_PRICES';
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeModal}>
@@ -271,5 +272,91 @@ const ImportPreviewModal: React.FC<{
                 </button>
             </div>
         </div>
+    );
+};
+
+const UpdateAllPricesForm: React.FC<{
+    stocks: Stock[];
+    onSave: (prices: { [symbol: string]: number }) => void;
+    onCancel: () => void;
+}> = ({ stocks, onSave, onCancel }) => {
+    const [prices, setPrices] = useState<{ [symbol: string]: string }>({});
+
+    useEffect(() => {
+        const initialPrices = stocks.reduce((acc, stock) => {
+            acc[stock.symbol] = stock.currentPrice?.toString() || '';
+            return acc;
+        }, {} as { [symbol: string]: string });
+        setPrices(initialPrices);
+    }, [stocks]);
+
+    const handlePriceChange = (symbol: string, value: string) => {
+        setPrices(prev => ({ ...prev, [symbol]: value }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const numericPrices: { [symbol: string]: number } = {};
+        let hasError = false;
+        
+        const stocksWithInputs = stocks.filter(stock => prices[stock.symbol] && prices[stock.symbol].trim() !== '');
+
+        if (stocksWithInputs.length === 0) {
+            onCancel(); 
+            return;
+        }
+
+        for (const stock of stocksWithInputs) {
+            const symbol = stock.symbol;
+            const priceStr = prices[symbol];
+            const priceNum = parseFloat(priceStr);
+            if (!isNaN(priceNum) && priceNum >= 0) {
+                numericPrices[symbol] = priceNum;
+            } else {
+                alert(`股票 ${symbol} 的價格無效。`);
+                hasError = true;
+                break;
+            }
+        }
+        
+        if (!hasError) {
+            onSave(numericPrices);
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">一鍵更新最新股價</h2>
+                <button type="button" onClick={onCancel} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg">
+                    <CloseIcon className="h-6 w-6"/>
+                </button>
+            </div>
+            <p className="text-sm text-light-text/70 dark:text-dark-text/70">
+                輸入您目前持有股票的最新價格。儲存後，此價格將會更新個股的「現價」，並寫入至本月份的歷史價格紀錄中。
+            </p>
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {stocks.map(stock => (
+                    <div key={stock.symbol} className="grid grid-cols-[1fr_auto] items-center gap-4">
+                        <label htmlFor={`price-${stock.symbol}`} className="font-medium text-light-text dark:text-dark-text truncate" title={`${stock.symbol} ${stock.name}`}>
+                           {stock.symbol} <span className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</span>
+                        </label>
+                        <input
+                            id={`price-${stock.symbol}`}
+                            type="number"
+                            step="any"
+                            placeholder="最新價格"
+                            value={prices[stock.symbol] || ''}
+                            onChange={e => handlePriceChange(stock.symbol, e.target.value)}
+                            className="w-32 p-2 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border focus:ring-primary focus:border-primary"
+                        />
+                    </div>
+                ))}
+            </div>
+            <div className="flex justify-end space-x-3 pt-2">
+                <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg">取消</button>
+                <button type="submit" className="px-5 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover">儲存</button>
+            </div>
+        </form>
     );
 };

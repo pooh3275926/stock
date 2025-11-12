@@ -347,6 +347,41 @@ const App: React.FC = () => {
     setModal({ type: 'DELETE_CONFIRMATION', data: { onConfirm: confirmDelete, title: `刪除此筆預算紀錄` } });
   };
   
+  const handleUpdateAllPrices = (prices: { [symbol: string]: number }) => {
+    setStocks(prevStocks => 
+      prevStocks.map(stock => 
+        prices[stock.symbol] !== undefined 
+          ? { ...stock, currentPrice: prices[stock.symbol] } 
+          : stock
+      )
+    );
+    
+    const now = new Date();
+    const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    setHistoricalPrices(prevPrices => {
+        const newPrices = [...prevPrices];
+        const pricesMap = new Map(newPrices.map(p => [p.stockSymbol, p]));
+
+        for (const symbol in prices) {
+            if (Object.prototype.hasOwnProperty.call(prices, symbol)) {
+                const price = prices[symbol];
+                if (!pricesMap.has(symbol)) {
+                    const newEntry: HistoricalPrice = { stockSymbol: symbol, prices: {} };
+                    newPrices.push(newEntry);
+                    pricesMap.set(symbol, newEntry);
+                }
+                const entry = pricesMap.get(symbol)!;
+                entry.prices[yearMonth] = price;
+            }
+        }
+        return newPrices;
+    });
+
+    setModal(null);
+    alert('股票價格已更新！');
+  };
+
   const portfolioCalculations = useMemo(() => {
     let totalCurrentCost = 0, totalMarketValue = 0, totalRealizedPnl = 0;
     
@@ -561,6 +596,7 @@ const App: React.FC = () => {
                       stocks={stocks}
                       historicalPrices={historicalPrices}
                       onSave={setHistoricalPrices}
+                      onOpenUpdateAllPricesModal={() => setModal({ type: 'UPDATE_ALL_PRICES', data: { stocks: activeStocks } })}
                   />;
       case 'SETTINGS':
         return <SettingsPage onExport={handleExportData} onImport={handleImportData} openModal={setModal} onBulkImport={handleBulkImport} />;
@@ -582,7 +618,7 @@ const App: React.FC = () => {
           <BottomNav setPage={setPage} currentPage={page} />
           {isScrolled && <ScrollToTopButton mainRef={mainContentRef} />}
       </div>
-      {modal && <ModalContainer modal={modal} closeModal={() => setModal(null)} onSaveTransaction={handleSaveTransaction} onSaveDividend={handleSaveDividend} onSaveDonation={handleSaveDonation} onSaveBudgetEntry={handleSaveBudgetEntry} onBulkImport={handleBulkImport} stocks={stocks} settings={settings} historicalPrices={historicalPrices} />}
+      {modal && <ModalContainer modal={modal} closeModal={() => setModal(null)} onSaveTransaction={handleSaveTransaction} onSaveDividend={handleSaveDividend} onSaveDonation={handleSaveDonation} onSaveBudgetEntry={handleSaveBudgetEntry} onUpdateAllPrices={handleUpdateAllPrices} onBulkImport={handleBulkImport} stocks={stocks} settings={settings} historicalPrices={historicalPrices} />}
     </div>
   );
 };
