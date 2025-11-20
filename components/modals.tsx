@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { CloseIcon } from './Icons';
+import { CloseIcon, RefreshIcon } from './Icons';
 import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice, BudgetEntry } from '../types';
 import { calculateStockFinancials, getLatestHistoricalPrice } from '../utils/calculations';
 import { stockMaster } from '../utils/data';
@@ -281,6 +282,8 @@ const UpdateAllPricesForm: React.FC<{
     onCancel: () => void;
 }> = ({ stocks, onSave, onCancel }) => {
     const [prices, setPrices] = useState<{ [symbol: string]: string }>({});
+    const [isLoading, setIsLoading] = useState(false);
+    const [updateStats, setUpdateStats] = useState<{count: number, date: string} | null>(null);
 
     useEffect(() => {
         const initialPrices = stocks.reduce((acc, stock) => {
@@ -292,6 +295,60 @@ const UpdateAllPricesForm: React.FC<{
 
     const handlePriceChange = (symbol: string, value: string) => {
         setPrices(prev => ({ ...prev, [symbol]: value }));
+    };
+
+    const handleAutoFetch = async () => {
+        setIsLoading(true);
+        setUpdateStats(null);
+        try {
+            // TWSE Stock Day Avg All
+            const response = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL');
+            if (!response.ok) {
+                throw new Error('無法連線至證交所 API');
+            }
+            const data = await response.json();
+            
+            let dataDate = '';
+            if (Array.isArray(data) && data.length > 0 && data[0].Date) {
+                 // Format Date if possible, assuming YYYYMMDD (e.g. "20231120")
+                 const d = data[0].Date;
+                 if (d.length === 8) {
+                     dataDate = `${d.substring(0, 4)}/${d.substring(4, 6)}/${d.substring(6, 8)}`;
+                 } else {
+                     dataDate = d;
+                 }
+            }
+
+            const priceMap = new Map<string, string>();
+            if (Array.isArray(data)) {
+                data.forEach((item: any) => {
+                    if (item.Code && item.ClosingPrice) {
+                        // Remove commas to ensure valid number parsing later
+                        const cleanPrice = item.ClosingPrice.replace(/,/g, '');
+                        priceMap.set(item.Code, cleanPrice);
+                    }
+                });
+            }
+
+            let updatedCount = 0;
+            setPrices(prev => {
+                const next = { ...prev };
+                stocks.forEach(stock => {
+                    if (priceMap.has(stock.symbol)) {
+                        next[stock.symbol] = priceMap.get(stock.symbol)!;
+                        updatedCount++;
+                    }
+                });
+                return next;
+            });
+            
+            setUpdateStats({ count: updatedCount, date: dataDate });
+        } catch (error) {
+            console.error(error);
+            alert('更新失敗，請稍後再試。\n(注意：此功能僅支援證交所上市股票)');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -332,9 +389,29 @@ const UpdateAllPricesForm: React.FC<{
                     <CloseIcon className="h-6 w-6"/>
                 </button>
             </div>
-            <p className="text-sm text-light-text/70 dark:text-dark-text/70">
-                輸入您目前持有股票的最新價格。儲存後，此價格將會更新個股的「現價」，並寫入至本月份的歷史價格紀錄中。
-            </p>
+            
+            <div className="flex flex-col gap-2 bg-light-bg dark:bg-dark-bg p-4 rounded-lg border border-light-border dark:border-dark-border">
+                <div className="flex justify-between items-center">
+                    <p className="text-sm text-light-text/80 dark:text-dark-text/80">
+                        自動從證交所 (TWSE) 取得最新收盤價。
+                    </p>
+                    <button 
+                        type="button" 
+                        onClick={handleAutoFetch}
+                        disabled={isLoading}
+                        className="flex-shrink-0 flex items-center px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary-hover text-sm disabled:opacity-70 transition-all"
+                    >
+                        <RefreshIcon className={`h-4 w-4 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
+                        {isLoading ? '更新中...' : '一鍵更新'}
+                    </button>
+                </div>
+                {updateStats && (
+                    <div className="text-xs text-success flex items-center mt-1">
+                        <span>✓ 已更新 {updateStats.count} 檔股票價格 (資料日期: {updateStats.date})</span>
+                    </div>
+                )}
+            </div>
+
             <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {stocks.map(stock => (
                     <div key={stock.symbol} className="grid grid-cols-[1fr_auto] items-center gap-4">
