@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Stock, Settings, Transaction } from '../types';
 import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig } from '../components/common';
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../components/Icons';
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon, RefreshIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
 interface PortfolioPageProps {
@@ -22,13 +22,15 @@ interface PortfolioPageProps {
     deleteSelectedTransactions: () => void;
     onEditTransaction: (stockSymbol: string, transactionId: string) => void;
     onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;
+    onAutoUpdate: () => Promise<void>;
 }
 type SortDirection = 'asc' | 'desc';
 
-export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, onAdd, onEdit, onDelete, onBuy, onSell, selectedSymbols, toggleSelection, clearSelection, deleteSelected, selectedTransactionIds, toggleTransactionSelection, clearTransactionSelection, deleteSelectedTransactions, onEditTransaction, onDeleteTransaction }) => {
+export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, onAdd, onEdit, onDelete, onBuy, onSell, selectedSymbols, toggleSelection, clearSelection, deleteSelected, selectedTransactionIds, toggleTransactionSelection, clearTransactionSelection, deleteSelectedTransactions, onEditTransaction, onDeleteTransaction, onAutoUpdate }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'symbol', direction: 'asc' });
     const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(new Set());
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const toggleExpandSymbol = useCallback((symbol: string) => {
         setExpandedSymbols(prev => {
@@ -61,6 +63,15 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, 
         clearSelection();
         clearTransactionSelection();
     }
+
+    const handleAutoUpdateClick = async () => {
+        setIsUpdating(true);
+        try {
+            await onAutoUpdate();
+        } finally {
+            setIsUpdating(false);
+        }
+    };
     
     return (
     <div className="space-y-6" onClick={(e) => { if(anySelectionActive) { const target = e.target as HTMLElement; if(!target.closest('.selectable-item, .selection-bar')) { handleClearSelection(); } } }}>
@@ -69,9 +80,20 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, 
           <div className="flex-grow">
               <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="搜尋股票代號或名稱..."/>
           </div>
-          <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-primary-foreground p-3 rounded-lg flex-shrink-0">
-              <PlusIcon className="h-6 w-6" />
-          </button>
+          <div className="flex gap-2 flex-shrink-0">
+              <button 
+                onClick={handleAutoUpdateClick} 
+                disabled={isUpdating}
+                className={`bg-secondary hover:bg-secondary/80 text-white p-3 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed`}
+                title="透過證交所 API 更新即時股價"
+              >
+                  <RefreshIcon className={`h-6 w-6 ${isUpdating ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">更新股價</span>
+              </button>
+              <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-primary-foreground p-3 rounded-lg">
+                  <PlusIcon className="h-6 w-6" />
+              </button>
+          </div>
       </div>
       {selectedSymbols.size > 0 && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedSymbols.size} onCancel={clearSelection} onDelete={deleteSelected} /></div>}
       {selectedTransactionIds.size > 0 && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedTransactionIds.size} onCancel={clearTransactionSelection} onDelete={deleteSelectedTransactions} itemName="筆交易" /></div>}

@@ -505,6 +505,52 @@ const App: React.FC = () => {
     alert('資料批次匯入成功！');
   }, []);
 
+  const handleAutoFetchPrices = async () => {
+    const symbols = Array.from(new Set(activeStocks.map(s => s.symbol)));
+    if (symbols.length === 0) {
+        alert("目前沒有持有任何股票，無法更新價格。");
+        return;
+    }
+
+    // Construct query string: tse_{id}.tw|otc_{id}.tw for each symbol to cover both markets
+    const channels = symbols.map(id => `tse_${id}.tw|otc_${id}.tw`).join('|');
+    const twseUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${channels}&json=1&delay=0`;
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(twseUrl)}`;
+
+    try {
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+      const prices: {[key: string]: number} = {};
+
+      if (data.msgArray && Array.isArray(data.msgArray)) {
+        data.msgArray.forEach((item: any) => {
+           const symbol = item.c;
+           // z = recent trade price, y = yesterday closing (if no trade today or early morning)
+           // Sometimes 'z' is '-' if no deal has been made yet.
+           const tradePrice = item.z !== '-' ? item.z : item.y;
+           const price = parseFloat(tradePrice);
+           
+           if (!isNaN(price) && price > 0) {
+             // If we successfully parsed a price, store it. 
+             // Since we query both TSE and OTC, we might get duplicates or invalid entries for the wrong market,
+             // but usually the invalid market entry returns empty or partial data without 'z'/'y' or with 'z':'-' and no valid price.
+             // We overwrite to ensure we capture the valid one.
+             prices[symbol] = price;
+           }
+        });
+      }
+
+      if (Object.keys(prices).length > 0) {
+         handleUpdateAllPrices(prices);
+      } else {
+         alert("無法從證交所取得有效資料，請稍後再試。");
+      }
+    } catch (error) {
+      console.error("Auto fetch failed:", error);
+      alert("更新失敗，請檢查網路連線或稍後再試。");
+    }
+  };
+
   const renderPage = () => {
     switch (page) {
       case 'DASHBOARD':
@@ -540,6 +586,7 @@ const App: React.FC = () => {
                     deleteSelectedTransactions={handleDeleteSelectedTransactions}
                     onEditTransaction={handleEditTransaction}
                     onDeleteTransaction={handleDeleteTransaction}
+                    onAutoUpdate={handleAutoFetchPrices}
                 />;
       case 'DIVIDENDS':
         return <DividendsPage 
