@@ -1,11 +1,9 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { CloseIcon, SearchIcon } from './Icons';
+import { CloseIcon } from './Icons';
 import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice, BudgetEntry } from '../types';
 import { calculateStockFinancials, getLatestHistoricalPrice } from '../utils/calculations';
 import { stockMaster } from '../utils/data';
 import { ParsedResult } from '../utils/parser';
-import { fetchStockData, fetchLatestPrice } from '../utils/tejApi';
 
 export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW' | 'BUDGET_ENTRY' | 'UPDATE_ALL_PRICES';
 export interface ModalState {
@@ -24,7 +22,7 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
             case 'DELETE_CONFIRMATION': return <DeleteConfirmation title={modal.data.title} message={modal.data.message} onConfirm={modal.data.onConfirm} onCancel={modal.data.onCancel || closeModal} />;
             case 'IMPORT_PREVIEW': return <ImportPreviewModal parsedData={modal.data.parsedData} importType={modal.data.importType} onConfirm={onBulkImport} onCancel={closeModal} />;
             case 'BUDGET_ENTRY': return <BudgetEntryForm onSave={handleSaveBudgetEntry} onCancel={closeModal} mode={modal.data.mode} entry={modal.data.entry} />;
-            case 'UPDATE_ALL_PRICES': return <UpdateAllPricesForm stocks={modal.data.stocks} settings={settings} onSave={onUpdateAllPrices} onCancel={closeModal} />;
+            case 'UPDATE_ALL_PRICES': return <UpdateAllPricesForm stocks={modal.data.stocks} onSave={onUpdateAllPrices} onCancel={closeModal} />;
             default: return null;
         }
     };
@@ -58,7 +56,6 @@ const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSa
     const [date, setDate] = useState(transaction?.date || new Date().toISOString().split('T')[0]);
     const [currentPrice, setCurrentPrice] = useState(stock?.currentPrice?.toString() || '');
     const [isFeeManuallyEdited, setIsFeeManuallyEdited] = useState(mode === 'edit');
-    const [isFetching, setIsFetching] = useState(false);
     
     const { currentShares } = useMemo(() => {
         if (!stock) return { currentShares: 0 };
@@ -97,26 +94,6 @@ const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSa
         }
     };
 
-    const handleFetchTejData = async () => {
-        if (!symbol) return;
-        setIsFetching(true);
-        try {
-            const info = await fetchStockData(symbol.toUpperCase(), settings.tejApiKey);
-            if (info.name) setName(info.name);
-            if (info.price !== undefined) {
-                if (!price && isAddMode) setPrice(info.price.toString());
-                setCurrentPrice(info.price.toString());
-            }
-            if (!info.name && !info.price) {
-                alert('TEJ API 查無資料，請確認代號或 API Key。');
-            }
-        } catch (e) {
-            alert('連線 TEJ API 失敗。');
-        } finally {
-            setIsFetching(false);
-        }
-    };
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const numShares = parseFloat(shares);
@@ -137,14 +114,7 @@ const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSa
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
             <div className="flex justify-between items-center"><h2 className="text-xl font-bold">{title}</h2><button type="button" onClick={onCancel} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg"><CloseIcon className="h-6 w-6"/></button></div>
             { (mode === 'buy' || mode === 'sell') && <div className="p-3 bg-light-bg dark:bg-dark-bg rounded-lg text-center">目前持有股數: <span className="font-bold">{currentShares.toLocaleString()}</span></div> }
-            <div className="relative">
-                 <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="text" placeholder="股票代號" value={symbol} onChange={e => setSymbol(e.target.value)} required disabled={!isAddMode} />
-                 {isAddMode && (
-                     <button type="button" onClick={handleFetchTejData} disabled={isFetching || !symbol} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-primary/20 text-primary rounded-md hover:bg-primary/30 transition-colors disabled:opacity-50">
-                        {isFetching ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div> : '自動填入'}
-                     </button>
-                 )}
-            </div>
+            <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="text" placeholder="股票代號" value={symbol} onChange={e => setSymbol(e.target.value)} required disabled={!isAddMode} />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="text" placeholder="股票名稱 (選填)" value={name} onChange={e => setName(e.target.value)} disabled={mode === 'buy' || mode === 'sell'} />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder={`${actionText}股數`} value={shares} onChange={e => setShares(e.target.value)} required />
             <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder={`${actionText}單價`} value={price} onChange={e => setPrice(e.target.value)} required />
@@ -152,10 +122,7 @@ const StockTransactionForm: React.FC<{ stocks: Stock[]; settings: Settings; onSa
                 <label className="text-sm text-light-text/70 dark:text-dark-text/70">更新目前股價 (選填)</label>
                 <div className="relative mt-1">
                     <input className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" placeholder="手動更新股價" value={currentPrice} onChange={e => setCurrentPrice(e.target.value)} />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
-                         <button type="button" onClick={handleFetchTejData} className="text-xs bg-primary/20 text-primary px-2 py-1 rounded hover:bg-primary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!symbol || isFetching} title="從 API 更新最新價格">TEJ</button>
-                         <button type="button" onClick={handleUseLatestPrice} className="text-xs bg-light-border text-light-text px-2 py-1 rounded hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!symbol} title="使用最新的歷史價格">歷史</button>
-                    </div>
+                    <button type="button" onClick={handleUseLatestPrice} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-primary/20 text-primary px-2 py-1 rounded hover:bg-primary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!symbol} title="使用最新的歷史價格">套用最新</button>
                 </div>
             </div>
             <div><label className="text-sm text-light-text/70 dark:text-dark-text/70">{`${actionText}手續費`}{isSellMode && ' + 證交稅'}</label><input className="w-full p-3 mt-1 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border" type="number" step="any" value={fees} onChange={e => { setFees(e.target.value); setIsFeeManuallyEdited(true); }} required /></div>
@@ -310,12 +277,10 @@ const ImportPreviewModal: React.FC<{
 
 const UpdateAllPricesForm: React.FC<{
     stocks: Stock[];
-    settings: Settings;
     onSave: (prices: { [symbol: string]: number }) => void;
     onCancel: () => void;
-}> = ({ stocks, settings, onSave, onCancel }) => {
+}> = ({ stocks, onSave, onCancel }) => {
     const [prices, setPrices] = useState<{ [symbol: string]: string }>({});
-    const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
         const initialPrices = stocks.reduce((acc, stock) => {
@@ -327,32 +292,6 @@ const UpdateAllPricesForm: React.FC<{
 
     const handlePriceChange = (symbol: string, value: string) => {
         setPrices(prev => ({ ...prev, [symbol]: value }));
-    };
-
-    const handleSyncWithTej = async () => {
-        if (!settings.tejApiKey) {
-            alert('請先至設定頁面輸入 TEJ API Key。');
-            return;
-        }
-        setIsSyncing(true);
-        const newPrices = { ...prices };
-        let successCount = 0;
-        
-        for (const stock of stocks) {
-            try {
-                const price = await fetchLatestPrice(stock.symbol, settings.tejApiKey);
-                if (price !== null) {
-                    newPrices[stock.symbol] = price.toString();
-                    successCount++;
-                }
-            } catch (e) {
-                console.error(`Failed to fetch price for ${stock.symbol}`);
-            }
-        }
-        
-        setPrices(newPrices);
-        setIsSyncing(false);
-        alert(`已成功從 TEJ 同步 ${successCount} 檔股票的價格。`);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -393,20 +332,9 @@ const UpdateAllPricesForm: React.FC<{
                     <CloseIcon className="h-6 w-6"/>
                 </button>
             </div>
-            <div className="flex justify-between items-center">
-                 <p className="text-sm text-light-text/70 dark:text-dark-text/70 flex-1 pr-2">
-                    輸入您目前持有股票的最新價格。儲存後，此價格將會更新個股的「現價」，並寫入至本月份的歷史價格紀錄中。
-                </p>
-                <button 
-                    type="button" 
-                    onClick={handleSyncWithTej} 
-                    disabled={isSyncing}
-                    className="text-sm bg-primary/20 text-primary px-3 py-2 rounded-lg hover:bg-primary/30 transition-colors flex items-center whitespace-nowrap disabled:opacity-50"
-                >
-                    {isSyncing ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div> : null}
-                    TEJ 價格同步
-                </button>
-            </div>
+            <p className="text-sm text-light-text/70 dark:text-dark-text/70">
+                輸入您目前持有股票的最新價格。儲存後，此價格將會更新個股的「現價」，並寫入至本月份的歷史價格紀錄中。
+            </p>
             <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {stocks.map(stock => (
                     <div key={stock.symbol} className="grid grid-cols-[1fr_auto] items-center gap-4">
