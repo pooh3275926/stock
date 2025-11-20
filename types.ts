@@ -49,6 +49,7 @@ export interface Settings {
   transactionFeeRate: number;
   taxRate: number;
   displayMode: 'PERCENTAGE' | 'AMOUNT';
+  tejApiKey: string;
 }
 
 export interface HistoricalPrice {

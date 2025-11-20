@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { DashboardIcon, PortfolioIcon, DividendIcon, HeartIcon, SettingsIcon, SunIcon, MoonIcon, HistoryIcon, PresentationChartLineIcon, BudgetIcon, GridIcon } from './components/Icons';
 import type { Stock, Dividend, Settings, Page, Transaction, Donation, HistoricalPrice, BudgetEntry } from './types';
@@ -43,6 +44,7 @@ const App: React.FC = () => {
     transactionFeeRate: 0.001425,
     taxRate: 0.001,
     displayMode: 'PERCENTAGE',
+    tejApiKey: 'mFPbCqmiXmzy3ikERBH0zkvFAWDzZ9',
   });
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -53,6 +55,13 @@ const App: React.FC = () => {
     return 'light';
   });
   const [modal, setModal] = useState<ModalState | null>(null);
+
+  // Initialize or migrate settings to ensure API key exists
+  useEffect(() => {
+    if (settings.tejApiKey === undefined) {
+        setSettings(prev => ({ ...prev, tejApiKey: 'mFPbCqmiXmzy3ikERBH0zkvFAWDzZ9' }));
+    }
+  }, [settings.tejApiKey, setSettings]);
 
   // Selection states
   const [selectedStockSymbols, setSelectedStockSymbols] = useState<Set<string>>(new Set());
@@ -504,6 +513,11 @@ const App: React.FC = () => {
     setModal(null);
     alert('資料批次匯入成功！');
   }, []);
+  
+  // Save settings update
+  const updateSettings = (newSettings: Settings) => {
+    setSettings(newSettings);
+  };
 
   const renderPage = () => {
     switch (page) {
@@ -599,7 +613,7 @@ const App: React.FC = () => {
                       onOpenUpdateAllPricesModal={() => setModal({ type: 'UPDATE_ALL_PRICES', data: { stocks: activeStocks } })}
                   />;
       case 'SETTINGS':
-        return <SettingsPage onExport={handleExportData} onImport={handleImportData} openModal={setModal} onBulkImport={handleBulkImport} />;
+        return <SettingsPage settings={settings} onUpdateSettings={updateSettings} onExport={handleExportData} onImport={handleImportData} openModal={setModal} onBulkImport={handleBulkImport} />;
       case 'MORE':
         return <MorePage setPage={setPage} />;
       default:

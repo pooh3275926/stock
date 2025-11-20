@@ -1,9 +1,13 @@
-import React, { useRef, useState } from 'react';
+
+import React, { useRef, useState, useEffect } from 'react';
 import { DownloadIcon, UploadIcon } from '../components/Icons';
 import { ModalState } from '../components/modals';
 import { parseTransactions, parseDividends, parseDonations, parseHistoricalPrices } from '../utils/parser';
+import type { Settings } from '../types';
 
 interface SettingsPageProps {
+    settings: Settings;
+    onUpdateSettings: (settings: Settings) => void;
     onExport: () => void;
     onImport: (data: any) => void;
     openModal: (modal: ModalState) => void;
@@ -12,7 +16,7 @@ interface SettingsPageProps {
 
 type QuickAddTab = 'transactions' | 'dividends' | 'donations' | 'prices';
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onExport, onImport, openModal, onBulkImport }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onUpdateSettings, onExport, onImport, openModal, onBulkImport }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<QuickAddTab>('transactions');
   const [textInputs, setTextInputs] = useState({
@@ -21,6 +25,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onExport, onImport, 
     donations: '',
     prices: ''
   });
+  
+  const [localApiKey, setLocalApiKey] = useState(settings.tejApiKey || '');
+
+  useEffect(() => {
+      setLocalApiKey(settings.tejApiKey || '');
+  }, [settings.tejApiKey]);
+
+  const handleApiKeyBlur = () => {
+      if (localApiKey !== settings.tejApiKey) {
+          onUpdateSettings({ ...settings, tejApiKey: localApiKey });
+      }
+  };
 
   const handleInputChange = (tab: QuickAddTab, value: string) => {
     setTextInputs(prev => ({ ...prev, [tab]: value }));
@@ -95,8 +111,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onExport, onImport, 
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold hidden md:block">設定</h1>
-      <div className="space-y-12 max-w-4xl">
+      <div className="space-y-8 max-w-4xl">
         
+        {/* API Settings */}
+        <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-4">TEJ API 設定</h2>
+             <p className="mb-4 text-light-text/80 dark:text-dark-text/80 text-sm">
+                輸入您的 TEJ API 金鑰以啟用自動更新股價與股票資訊功能。
+            </p>
+            <div className="flex flex-col space-y-2">
+                <label htmlFor="tejApiKey" className="font-medium">API Key</label>
+                <input 
+                    id="tejApiKey"
+                    type="password" 
+                    value={localApiKey}
+                    onChange={(e) => setLocalApiKey(e.target.value)}
+                    onBlur={handleApiKeyBlur}
+                    placeholder="請輸入 TEJ API Key"
+                    className="w-full p-3 bg-light-bg dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border focus:ring-primary focus:border-primary"
+                />
+                 <p className="text-xs text-light-text/60 dark:text-dark-text/60">
+                    注意：API 金鑰將儲存在您的瀏覽器 LocalStorage 中。
+                </p>
+            </div>
+        </div>
+
         {/* Quick Add Section */}
         <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">快速輸入 / 批次匯入</h2>
