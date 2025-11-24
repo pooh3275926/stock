@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart } from '../components/PortfolioCharts';
@@ -24,7 +25,6 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
 
   const [projectionYears, setProjectionYears] = useState<number>(30);
-  // Default values will be calculated in useEffect if they haven't been touched, but for now init with sensible defaults
   const [expectedPnlRate, setExpectedPnlRate] = useState<number>(5);
   const [expectedDivRate, setExpectedDivRate] = useState<number>(5);
   const [hasUserSetRates, setHasUserSetRates] = useState(false);
@@ -114,10 +114,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const totalReturnRate = totalCurrentCost > 0 ? (totalReturn / totalCurrentCost) * 100 : 0;
     const dividendYield = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) * 100 : 0;
     
-    // Auto-calculate default rates if user hasn't set them
-    const calculatedPnlRate = totalCurrentCost > 0 ? (unrealizedPnl / totalCurrentCost) * 100 : 0;
-    // For dividend rate, use yield as a proxy for annual reinvestment rate
-    const calculatedDivRate = dividendYield; 
+    // Auto-calculate default annualized rates for the calculator (CAGR approximation)
+    const investmentYears = Math.max(1, new Date().getFullYear() - 2021);
+    
+    const totalUnrealizedRate = totalCurrentCost > 0 ? (unrealizedPnl / totalCurrentCost) : 0;
+    // (1 + total)^ (1/n) - 1
+    const annualizedPnlRate = (Math.pow(1 + totalUnrealizedRate, 1 / investmentYears) - 1) * 100;
+
+    const totalDividendRate = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) : 0;
+    const annualizedDivRate = (Math.pow(1 + totalDividendRate, 1 / investmentYears) - 1) * 100;
 
     const contributionData = activeStocksForCharts.map(stock => {
         const financials = calculateStockFinancials(stock);
@@ -163,22 +168,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       topPnl, bottomPnl,
       topTotalReturn, bottomTotalReturn,
       topYield, bottomYield,
-      calculatedPnlRate,
-      calculatedDivRate
+      annualizedPnlRate,
+      annualizedDivRate
     };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
   // Update default rates once based on calculation
   useEffect(() => {
-    if (!hasUserSetRates && dashboardData.calculatedPnlRate !== 0) {
-        // Use a conservative simplification: current total % / 3 years roughly or just use the current total % as a "Optimistic Long Term Target"
-        // Let's default to flat 5% if calculated is crazy, otherwise use calculated but cap at reasonable display
-        const pnl = Math.max(0, parseFloat(dashboardData.calculatedPnlRate.toFixed(1)));
-        const div = Math.max(0, parseFloat(dashboardData.calculatedDivRate.toFixed(1)));
-        if (pnl !== 0) setExpectedPnlRate(pnl);
-        if (div !== 0) setExpectedDivRate(div);
+    if (!hasUserSetRates) {
+        const pnl = Math.max(0, parseFloat(dashboardData.annualizedPnlRate.toFixed(1)));
+        const div = Math.max(0, parseFloat(dashboardData.annualizedDivRate.toFixed(1)));
+        if (!isNaN(pnl) && pnl !== 0) setExpectedPnlRate(pnl);
+        if (!isNaN(div) && div !== 0) setExpectedDivRate(div);
     }
-  }, [dashboardData.calculatedPnlRate, dashboardData.calculatedDivRate, hasUserSetRates]);
+  }, [dashboardData.annualizedPnlRate, dashboardData.annualizedDivRate, hasUserSetRates]);
 
 
   // --- Compound Interest Calculation Logic ---
@@ -188,6 +191,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const endYear = startYear + projectionYears;
     const chartData: { year: number; actual?: number; estimated: number }[] = [];
 
+    // Filter stocks and dividends by the currently selected symbols (independent of year filter)
+    const symbolsSet = new Set(filteredSymbols);
+    const chartStocks = stocks.filter(s => symbolsSet.has(s.symbol));
+    const chartDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
+
     // Helper to calculate stats for a specific historical year
     const getStatsByYear = (year: number) => {
         const yearEndDate = new Date(year, 11, 31, 23, 59, 59);
@@ -195,27 +203,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
         let yearCumulativeRealized = 0;
         let yearCost = 0;
 
-        stocks.forEach(stock => {
+        chartStocks.forEach(stock => {
             const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate);
             if (txUntilDate.length === 0) return;
 
-            const tempStock = { ...stock, transactions: txUntilDate };
             // Need price at that year end
             const histPrice = getHistoricalPriceAsOf(stock.symbol, year, 12, historicalPrices);
             
             // Recalculate financial state
             let shares = 0;
-            let totalBuyCost = 0;
             let soldPnL = 0;
             const buyQueue: {shares: number, cost: number}[] = [];
             
+            // Transaction replay logic
             const sortedTx = [...txUntilDate].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             
             sortedTx.forEach(t => {
                 if(t.type === 'BUY') {
                     buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
                     shares += t.shares;
-                    totalBuyCost += (t.shares * t.price + t.fees);
                 } else {
                     let sellShares = t.shares;
                     shares -= t.shares;
@@ -235,7 +241,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                 }
             });
 
-            // Calculate Remaining Cost for held shares
+            // Calculate Remaining Cost for held shares (Total Principal Invested at that time)
             const remainingCost = buyQueue.reduce((s, b) => s + b.cost, 0);
             yearCost += remainingCost;
 
@@ -247,7 +253,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             yearCumulativeRealized += soldPnL;
         });
 
-        const dividendsUntilDate = dividends
+        const dividendsUntilDate = chartDividends
             .filter(d => new Date(d.date) <= yearEndDate)
             .reduce((sum, d) => sum + d.amount, 0);
 
@@ -267,47 +273,51 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const baseline = getStatsByYear(startYear);
     const baseCost = baseline.cost;
     const baseCumDiv = baseline.cumDiv;
+    const baseMarketValue = baseline.marketValue;
+    const baseRealized = baseline.realizedPnl;
     
+    const actual2021 = baseMarketValue + baseCumDiv + baseRealized;
+
+    // Calculate Offset for Estimation to ensure Estimated(2021) == Actual(2021)
+    // Formula per requirement:
+    // P1 = (BaseCost + BaseDiv) * (1+DivRate)^n
+    // P2 = BaseCost * (1+PnlRate)^n
+    // Estimated_Raw = P1 + P2
+    // We want Estimated_Final(0) = Actual(2021)
+    // Estimated_Final(n) = Estimated_Raw(n) - (Estimated_Raw(0) - Actual(2021))
+    
+    const ratePnl = expectedPnlRate / 100;
+    const rateDiv = expectedDivRate / 100;
+    
+    // n=0 values
+    const rawEst0 = (baseCost + baseCumDiv) + baseCost;
+    const calibrationOffset = actual2021 - rawEst0;
+
     // 2. Build Series
     for (let y = startYear; y <= endYear; y++) {
+        const n = y - startYear;
+        
         // --- Actual Calculation ---
         let actualVal: number | undefined = undefined;
         
         if (y <= currentYear) {
             const currentStats = getStatsByYear(y);
-            // Actual Logic: Deduct change in cost (Principal) from Total Asset
-            // Adjusted Actual = (MarketValue + CumDiv + Realized) - (CurrentCost - BaseCost)
-            // Explanation: (Cost + Unrealized + CumDiv + Realized) - Cost + BaseCost
-            //            = BaseCost + Unrealized + CumDiv + Realized
-            // This represents the "Value of the original 2021 principal + All accumulated returns"
+            // Actual Asset = MarketValue + CumDiv + RealizedPnl
             const totalAsset = currentStats.marketValue + currentStats.cumDiv + currentStats.realizedPnl;
+            // Adjustment: Subtract principal injected after 2021 to show organic growth relative to 2021 base
             const costChange = currentStats.cost - baseCost;
             actualVal = totalAsset - costChange;
         }
 
         // --- Estimated Calculation ---
-        // Formula per request:
-        // Part 1: Dividend Compounding = (BaseCost + BaseDiv) * (1 + DivRate)^n
-        // Part 2: P&L Compounding = BaseCost * (1 + PnlRate)^n
-        // Part 3 (Total): We need to be careful not to double count BaseCost.
-        // Interpretation: 
-        //   Projected P&L Wealth = BaseCost * (1+r_pnl)^n
-        //   Projected Div Wealth (Growth) = (BaseCost + BaseDiv) * (1+r_div)^n - BaseCost
-        //   Total = Projected P&L Wealth + Projected Div Wealth (Growth)
+        // Part 1: Dividend Compounding Wealth
+        const part1 = (baseCost + baseCumDiv) * Math.pow(1 + rateDiv, n);
         
-        const n = y - startYear;
-        const ratePnl = expectedPnlRate / 100;
-        const rateDiv = expectedDivRate / 100;
+        // Part 2: P&L Compounding Wealth
+        const part2 = baseCost * Math.pow(1 + ratePnl, n);
 
-        // Part 1: Projected Dividend Growth Amount (Using BaseCost+BaseDiv as generator)
-        // We subtract BaseCost to isolate the "Dividend Asset Value" generated, assuming BaseCost is accounted for in P&L part
-        const projectedDivAsset = (baseCost + baseCumDiv) * Math.pow(1 + rateDiv, n) - baseCost;
-        
-        // Part 2: Projected Stock Asset (Principal + Unrealized P&L)
-        const projectedStockAsset = baseCost * Math.pow(1 + ratePnl, n);
-
-        // Sum
-        const estimatedVal = projectedStockAsset + projectedDivAsset;
+        // Total with Calibration
+        const estimatedVal = part1 + part2 + calibrationOffset;
 
         chartData.push({
             year: y,
@@ -317,7 +327,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     }
 
     return chartData;
-  }, [stocks, dividends, historicalPrices, projectionYears, expectedPnlRate, expectedDivRate]);
+  }, [stocks, dividends, filteredSymbols, historicalPrices, projectionYears, expectedPnlRate, expectedDivRate]); // Depend on filteredSymbols, but NOT selectedYear
 
   const handleRateChange = (type: 'pnl' | 'div', val: string) => {
       setHasUserSetRates(true);
@@ -391,9 +401,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
              <div className="flex flex-col md:flex-row justify-between items-start md:items-start mb-6 gap-4">
                  <div className="flex-1">
                     <h2 className="text-xl font-semibold">複利成長預估 vs 實際資產</h2>
-                    <p className="text-sm text-light-text/70 dark:text-dark-text/70 mt-1 max-w-xl">
-                        以 2021 年為基準，比較實際資產成長與預期複利效果。實際資產已扣除 2021 年後的本金投入變動。
-                    </p>
                 </div>
                  <div className="w-full md:w-auto flex flex-wrap gap-3 items-end bg-light-bg dark:bg-dark-bg p-3 rounded-lg border border-light-border dark:border-dark-border">
                     <div>
