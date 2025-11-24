@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 // FIX: Added AreaChart to the import from recharts to resolve 'Cannot find name' errors.
-import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart } from 'recharts';
+import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart } from 'recharts';
 import { Stock, Dividend, Transaction, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
@@ -151,6 +151,52 @@ export const YieldContributionChart: React.FC<ProfitLossBarChartProps> = ({ data
                     ))}
                 </Bar>
             </BarChart>
+        </ResponsiveContainer>
+    );
+};
+
+// --- Compound Interest Chart ---
+interface CompoundInterestChartData {
+    year: number;
+    actual?: number;
+    estimated: number;
+}
+interface CompoundInterestChartProps {
+    data: CompoundInterestChartData[];
+    theme: 'light' | 'dark';
+}
+export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ data, theme }) => {
+    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
+    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
+    const tooltipStyle = {
+        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
+        border: '1px solid',
+        borderColor: gridColor,
+        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
+        borderRadius: '0.5rem',
+    };
+
+    return (
+        <ResponsiveContainer width="100%" height={350}>
+            <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                    <linearGradient id="colorEstimated" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={COLOR_PRIMARY} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={COLOR_PRIMARY} stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <XAxis dataKey="year" stroke={axisColor} />
+                <YAxis stroke={axisColor} tickFormatter={(val) => `NT$${(val / 10000).toFixed(0)}萬`} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
+                    formatter={(value: number) => formatCurrency(value, 'TWD')}
+                />
+                <Legend />
+                <Area type="monotone" dataKey="estimated" stroke={COLOR_PRIMARY} fillOpacity={1} fill="url(#colorEstimated)" name="預估資產 (含息)" />
+                <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name="實際資產" />
+            </ComposedChart>
         </ResponsiveContainer>
     );
 };

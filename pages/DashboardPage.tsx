@@ -1,7 +1,6 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { KpiCard } from '../components/KpiCard';
-import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart } from '../components/PortfolioCharts';
+import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart } from '../components/PortfolioCharts';
 import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice, getHistoricalPriceAsOf } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
@@ -23,6 +22,9 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
+
+  const [projectionYears, setProjectionYears] = useState<number>(30);
+  const [expectedReturnRate, setExpectedReturnRate] = useState<number>(6);
 
   const heldSymbols = useMemo(() => {
     return stocks.filter(stock => {
@@ -156,6 +158,112 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
+  // --- Compound Interest Calculation Logic ---
+  const compoundInterestData = useMemo(() => {
+    const startYear = 2021;
+    const currentYear = new Date().getFullYear();
+    const endYear = startYear + projectionYears;
+    const chartData: { year: number; actual?: number; estimated: number }[] = [];
+
+    // 1. Calculate Historical "Actual" Values (2021 -> Current Year)
+    const actualValues: { [year: number]: number } = {};
+    
+    for (let y = startYear; y <= currentYear; y++) {
+        const yearEndDate = new Date(y, 11, 31, 23, 59, 59);
+        
+        let yearTotalMarketValue = 0;
+        let yearCumulativeRealized = 0;
+        
+        // Loop all stocks to find value at end of year 'y'
+        stocks.forEach(stock => {
+            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate);
+            if (txUntilDate.length === 0) return;
+
+            // Re-calculate stock position at this point in time
+            const tempStock = { ...stock, transactions: txUntilDate };
+            // Need historical price for this year
+            const histPrice = getHistoricalPriceAsOf(stock.symbol, y, 12, historicalPrices);
+            
+            // Re-calc using helper
+            // We need a lightweight calc here or mock object
+            // To properly do this, we replicate simple logic:
+            let shares = 0;
+            let soldPnL = 0;
+            const buyQueue: {shares: number, cost: number}[] = [];
+            
+            // Sort by date ascending
+            const sortedTx = [...txUntilDate].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            sortedTx.forEach(t => {
+                if(t.type === 'BUY') {
+                    buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
+                    shares += t.shares;
+                } else {
+                    let sellShares = t.shares;
+                    shares -= t.shares;
+                    let costSold = 0;
+                    while(sellShares > 0 && buyQueue.length > 0) {
+                        const b = buyQueue[0];
+                        const take = Math.min(sellShares, b.shares);
+                        const costPerShare = b.cost / b.shares;
+                        costSold += take * costPerShare;
+                        b.shares -= take;
+                        b.cost -= take * costPerShare;
+                        sellShares -= take;
+                        if(b.shares <= 0.0001) buyQueue.shift();
+                    }
+                    const proceeds = t.shares * t.price - t.fees;
+                    soldPnL += (proceeds - costSold);
+                }
+            });
+
+            const finalPrice = histPrice !== null ? histPrice : (
+                 // Fallback: If no historical price, use the LAST transaction price of that year or current price if none
+                 // This is an estimation fallback.
+                 txUntilDate.length > 0 ? txUntilDate[txUntilDate.length - 1].price : stock.currentPrice
+            );
+            
+            yearTotalMarketValue += (shares * finalPrice);
+            yearCumulativeRealized += soldPnL;
+        });
+
+        // Cumulative Dividends until end of year y
+        const dividendsUntilDate = dividends
+            .filter(d => new Date(d.date) <= yearEndDate)
+            .reduce((sum, d) => sum + d.amount, 0);
+
+        actualValues[y] = yearTotalMarketValue + yearCumulativeRealized + dividendsUntilDate;
+    }
+
+    // 2. Build Projection Series
+    // Base amount is Actual Value of 2021 (Start Year)
+    let baseAmount = actualValues[startYear] || 0;
+    
+    // If 2021 has 0 value (user started later), try to find the first non-zero year to base the curve slope,
+    // BUT the requirement says "2021 actual = 2021 estimated". So if 2021 is 0, projection starts at 0.
+    // However, to make it look like a projection chart, we usually want to see growth.
+    // If base is 0, let's keep it 0 until actual data starts.
+    
+    for (let y = startYear; y <= endYear; y++) {
+        // Calculate Estimated
+        // Formula: Year N = Base * (1 + rate)^(N - StartYear)
+        const yearsDiff = y - startYear;
+        const estimated = baseAmount * Math.pow(1 + expectedReturnRate / 100, yearsDiff);
+
+        // Actual value exists?
+        const actual = (y <= currentYear) ? (actualValues[y] || 0) : undefined;
+
+        chartData.push({
+            year: y,
+            actual,
+            estimated: Math.round(estimated)
+        });
+    }
+
+    return chartData;
+  }, [stocks, dividends, historicalPrices, projectionYears, expectedReturnRate]);
+
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -213,6 +321,44 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-center">年度股利收入</h2>
             <AdvancedMonthlyDividendChart dividends={dashboardData.dividendsForChart} theme={theme} />
+        </div>
+
+        {/* Compound Interest Calculator Section */}
+        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                 <div>
+                    <h2 className="text-xl font-semibold">複利成長預估 vs 實際資產</h2>
+                    <p className="text-sm text-light-text/70 dark:text-dark-text/70 mt-1">
+                        以 2021 年為基準，比較實際資產成長與預期複利效果。實際資產包含持股市值、累計已實現損益與累計股利。
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">預估年數</label>
+                        <select 
+                            value={projectionYears} 
+                            onChange={(e) => setProjectionYears(Number(e.target.value))}
+                            className="p-2 bg-light-bg dark:bg-dark-bg border border-light-border dark:border-dark-border rounded-md text-sm"
+                        >
+                            <option value={10}>10 年</option>
+                            <option value={20}>20 年</option>
+                            <option value={30}>30 年</option>
+                            <option value={40}>40 年</option>
+                        </select>
+                    </div>
+                     <div>
+                        <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">預期年化報酬率 (%)</label>
+                        <input 
+                            type="number" 
+                            value={expectedReturnRate} 
+                            onChange={(e) => setExpectedReturnRate(Number(e.target.value))}
+                            className="p-2 w-24 bg-light-bg dark:bg-dark-bg border border-light-border dark:border-dark-border rounded-md text-sm"
+                            step="0.1"
+                        />
+                    </div>
+                </div>
+            </div>
+            <CompoundInterestChart data={compoundInterestData} theme={theme} />
         </div>
     </div>
   );
