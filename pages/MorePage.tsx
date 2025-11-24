@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Page } from '../types';
-import { HeartIcon, HistoryIcon, PresentationChartLineIcon, SettingsIcon } from '../components/Icons';
+import { HeartIcon, HistoryIcon, PresentationChartLineIcon, SettingsIcon, BudgetIcon } from '../components/Icons';
 
 interface MorePageProps {
   setPage: (page: Page) => void;
@@ -9,8 +9,9 @@ interface MorePageProps {
 const moreNavItems = [
     { id: 'DONATION_FUND', icon: HeartIcon, label: '奉獻基金' }, 
     { id: 'TRANSACTION_HISTORY', icon: HistoryIcon, label: '賣出紀錄' }, 
+    { id: 'BUDGET', icon: BudgetIcon, label: '投資預算' },
     { id: 'HISTORICAL_PRICES', icon: PresentationChartLineIcon, label: '歷史股價' }, 
-    { id: 'SETTINGS', icon: SettingsIcon, label: '設定' }
+    { id: 'SETTINGS', icon: SettingsIcon, label: '資料設定' }
 ];
 
 export const MorePage: React.FC<MorePageProps> = ({ setPage }) => {

@@ -27,6 +27,7 @@ type SortDirection = 'asc' | 'desc';
 export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends, settings, onAdd, onEdit, onDelete, selectedGroups, toggleGroupSelection, clearGroupSelection, deleteSelectedGroups, selectedIds, toggleIdSelection, clearIdSelection, deleteSelectedIds }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'stockSymbol', direction: 'asc' });
+    const [showOnlyHeld, setShowOnlyHeld] = useState(false);
 
     const groupedDividends = useMemo(() => {
         const filtered = dividends.filter(d => d.stockSymbol.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -40,7 +41,7 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
             groups[d.stockSymbol].details.push(d);
         });
 
-        return Object.entries(groups).map(([symbol, group]) => {
+        const result = Object.entries(groups).map(([symbol, group]) => {
             const totalAmount = group.details.reduce((sum, d) => sum + d.amount, 0);
             const stock = stocks.find(s => s.symbol === symbol);
             const financials = stock ? calculateStockFinancials(stock) : { totalCost: 0, currentShares: 0, avgCost: 0 };
@@ -75,7 +76,13 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
                 avgDividendPerShare,
             };
         });
-    }, [dividends, stocks, searchTerm]);
+
+        if (showOnlyHeld) {
+            return result.filter(group => group.currentShares > 0);
+        }
+        return result;
+
+    }, [dividends, stocks, searchTerm, showOnlyHeld]);
 
     const sortedGroups = useMemo(() => {
         return [...groupedDividends].sort((a, b) => {
@@ -107,13 +114,24 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
     return (
         <div className="space-y-6" onClick={(e) => { if(selectionActive) { const target = e.target as HTMLElement; if(!target.closest('.selectable-item, .selection-bar')) { clearSelection(); } } }}>
             <h1 className="text-3xl font-bold hidden md:block">股利紀錄</h1>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row md:items-center gap-4">
                 <div className="flex-grow">
                     <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="搜尋股票代號..."/>
                 </div>
-                <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-primary-foreground p-3 rounded-lg flex-shrink-0">
-                    <PlusIcon className="h-6 w-6" />
-                </button>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                    <label className="flex items-center space-x-2 cursor-pointer bg-light-card dark:bg-dark-card p-3 rounded-lg border border-light-border dark:border-dark-border">
+                        <input 
+                            type="checkbox" 
+                            className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary"
+                            checked={showOnlyHeld}
+                            onChange={(e) => setShowOnlyHeld(e.target.checked)}
+                        />
+                        <span className="font-medium text-light-text dark:text-dark-text select-none">僅顯示持有中</span>
+                    </label>
+                    <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-primary-foreground p-3 rounded-lg flex-shrink-0">
+                        <PlusIcon className="h-6 w-6" />
+                    </button>
+                </div>
             </div>
             {groupSelectionActive && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedGroups.size} onCancel={clearGroupSelection} onDelete={deleteSelectedGroups} itemName="組" /></div>}
             {idSelectionActive && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedIds.size} onCancel={clearIdSelection} onDelete={deleteSelectedIds} itemName="筆" /></div>}
@@ -231,7 +249,7 @@ const GroupedDividendCard: React.FC<{ group: any; settings: Settings; onEdit: (d
                     <div>
                         <div className="font-bold text-lg">{group.stockSymbol}</div>
                         <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
-                        <div className="text-xs text-light-text/70 dark:text-dark-text/70 mt-2">參與股數: {group.currentShares.toLocaleString()}</div>
+                        <div className="text-xs text-light-text/70 dark:text-dark-text/70 mt-2">參與股數: {group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</div>
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70">每股股利: {group.avgDividendPerShare.toFixed(4)}</div>
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70">持有總成本: {formatCurrency(group.currentTotalCost, settings.currency)}</div>
                     </div>

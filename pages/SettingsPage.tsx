@@ -94,7 +94,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onExport, onImport, 
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold hidden md:block">設定</h1>
+      <h1 className="text-3xl font-bold hidden md:block">資料設定</h1>
       <div className="space-y-12 max-w-4xl">
         
         {/* Quick Add Section */}

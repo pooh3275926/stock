@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { DashboardIcon, PortfolioIcon, DividendIcon, HeartIcon, SettingsIcon, SunIcon, MoonIcon, HistoryIcon, PresentationChartLineIcon, BudgetIcon, GridIcon } from './components/Icons';
+import { DashboardIcon, PortfolioIcon, DividendIcon, HeartIcon, SettingsIcon, SunIcon, MoonIcon, HistoryIcon, PresentationChartLineIcon, BudgetIcon, GridIcon, ChartBarSquareIcon } from './components/Icons';
 import type { Stock, Dividend, Settings, Page, Transaction, Donation, HistoricalPrice, BudgetEntry } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { calculateStockFinancials } from './utils/calculations';
@@ -8,6 +8,7 @@ import { stockMaster } from './utils/data';
 import { DashboardPage } from './pages/DashboardPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { DividendsPage } from './pages/DividendsPage';
+import { TotalReturnPage } from './pages/TotalReturnPage';
 import { DonationFundPage } from './pages/DonationFundPage';
 import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -19,14 +20,15 @@ import { ScrollToTopButton } from './components/common';
 import { ParsedResult } from './utils/parser';
 
 const pageTitles: { [key in Page]: string } = {
-  DASHBOARD: '總覽',
+  DASHBOARD: '股票總覽',
   PORTFOLIO: '我的持股',
   DIVIDENDS: '股利紀錄',
+  TOTAL_RETURN: '含息損益',
   BUDGET: '投資預算',
   DONATION_FUND: '奉獻基金',
   TRANSACTION_HISTORY: '交易紀錄',
   HISTORICAL_PRICES: '歷史股價',
-  SETTINGS: '設定',
+  SETTINGS: '資料設定',
   MORE: '更多功能',
 };
 
@@ -605,6 +607,12 @@ const App: React.FC = () => {
                     clearIdSelection={() => setSelectedDividendIds(new Set())}
                     deleteSelectedIds={handleDeleteSelectedDividendIds}
                 />;
+      case 'TOTAL_RETURN':
+        return <TotalReturnPage
+                  stocks={activeStocks}
+                  dividends={dividends}
+                  settings={settings}
+                />;
       case 'BUDGET':
         return <BudgetPage
                     stocks={stocks}
@@ -672,17 +680,23 @@ const App: React.FC = () => {
 
 // --- Navigation Components ---
 const allNavItems = [ 
-    { id: 'DASHBOARD', icon: DashboardIcon, label: '總覽' }, 
+    { id: 'DASHBOARD', icon: DashboardIcon, label: '股票總覽' }, 
     { id: 'PORTFOLIO', icon: PortfolioIcon, label: '我的持股' }, 
     { id: 'DIVIDENDS', icon: DividendIcon, label: '股利紀錄' },
+    { id: 'TOTAL_RETURN', icon: ChartBarSquareIcon, label: '含息損益' },
     { id: 'BUDGET', icon: BudgetIcon, label: '投資預算' },
     { id: 'DONATION_FUND', icon: HeartIcon, label: '奉獻基金' }, 
     { id: 'TRANSACTION_HISTORY', icon: HistoryIcon, label: '賣出紀錄' }, 
     { id: 'HISTORICAL_PRICES', icon: PresentationChartLineIcon, label: '歷史股價' }, 
-    { id: 'SETTINGS', icon: SettingsIcon, label: '設定' }
+    { id: 'SETTINGS', icon: SettingsIcon, label: '資料設定' }
 ];
 
-const mainBottomNavItems = allNavItems.slice(0, 4);
+const mainBottomNavItems = [
+    { id: 'DASHBOARD', icon: DashboardIcon, label: '股票總覽' }, 
+    { id: 'PORTFOLIO', icon: PortfolioIcon, label: '我的持股' }, 
+    { id: 'DIVIDENDS', icon: DividendIcon, label: '股利紀錄' },
+    { id: 'TOTAL_RETURN', icon: ChartBarSquareIcon, label: '含息損益' },
+];
 const moreBottomNavItem = { id: 'MORE', icon: GridIcon, label: '更多' };
 
 const Sidebar: React.FC<{ setPage: (page: Page) => void; currentPage: Page, theme: 'light' | 'dark', toggleTheme: () => void; }> = ({ setPage, currentPage, theme, toggleTheme }) => {
