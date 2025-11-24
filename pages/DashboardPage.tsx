@@ -270,7 +270,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
          }
 
          // Store current yield for future estimations
-         // Avoid NaN or Infinity if cost is 0
          if (yearCost > 0) {
              yieldHistory.push(yearDividend / yearCost);
          } else {
@@ -288,95 +287,49 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
   }, [stocks, dividends, filteredSymbols]);
 
 
-  // --- Compound Interest (Dividend Growth) Calculation Logic ---
+  // --- Dividend Reinvestment Compound Calculation Logic ---
   const compoundInterestData = useMemo(() => {
-    const startYear = 2021;
     const currentYear = new Date().getFullYear();
-    const endYear = startYear + projectionYears;
+    const endYear = currentYear + projectionYears;
     const chartData: { year: number; actual?: number; estimated: number }[] = [];
 
+    // Principal: Current Total Cost of currently held stocks
+    // (We use dashboardData.stats.totalCost which respects filters if 'all' years selected, 
+    // or we can recalculate specifically for "Held" stocks if needed. 
+    // Usually "Dividend Reinvestment" implies re-investing based on current portfolio.)
+    
+    // NOTE: dashboardData.stats.totalCost is based on 'selectedYear'.
+    // If the user selects '2022' in the dropdown, stats.totalCost reflects 2022 cost.
+    // For a future projection, we ALWAYS want the CURRENT holding cost, regardless of the year filter selected on the dashboard.
+    // Let's recalculate current holding cost quickly for unfiltered projection base.
+    
     const symbolsSet = new Set(filteredSymbols);
-    const chartStocks = stocks.filter(s => symbolsSet.has(s.symbol));
-    const chartDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
-
-    // 1. Prepare historical cost and dividend data
-    const historyData = new Map<number, { cost: number; dividend: number }>();
-
-    for (let y = startYear; y <= currentYear; y++) {
-         const yearEndDate = new Date(y, 11, 31, 23, 59, 59);
-         
-         // Calculate Total Held Cost at year end
-         let yearCost = 0;
-         chartStocks.forEach(stock => {
-            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            const buyQueue: {shares: number, cost: number}[] = [];
-            
-            txUntilDate.forEach(t => {
-                if(t.type === 'BUY') {
-                    buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
-                } else {
-                    let sellShares = t.shares;
-                    while(sellShares > 0 && buyQueue.length > 0) {
-                        const b = buyQueue[0];
-                        const take = Math.min(sellShares, b.shares);
-                        const costPerShare = b.cost / b.shares;
-                        b.shares -= take;
-                        b.cost -= take * costPerShare;
-                        sellShares -= take;
-                        if(b.shares <= 0.0001) buyQueue.shift();
-                    }
-                }
-            });
-            yearCost += buyQueue.reduce((s, b) => s + b.cost, 0);
-         });
-
-         const yearDividend = chartDividends
-            .filter(d => new Date(d.date).getFullYear() === y)
-            .reduce((sum, d) => sum + d.amount, 0);
-        
-         historyData.set(y, { cost: yearCost, dividend: yearDividend });
-    }
+    const currentCost = stocks
+        .filter(s => symbolsSet.has(s.symbol))
+        .reduce((sum, stock) => {
+            const financials = calculateStockFinancials(stock);
+            return sum + financials.totalCost;
+        }, 0);
 
     const rateDiv = expectedDivRate / 100;
-    const currentCost = historyData.get(currentYear)?.cost || 0;
 
-    // 2. Build Chart Data
-    for (let y = startYear; y <= endYear; y++) {
-        let actualVal: number | undefined = undefined;
-        let estimatedVal = 0;
-
-        if (y <= currentYear) {
-            const data = historyData.get(y);
-            actualVal = data?.dividend || 0;
-            const cost = data?.cost || 0;
-            
-            // Past Estimation: Based on Actual Cost * User Rate
-            // User requested: 2021 Actual = Estimated.
-            if (y === startYear) {
-                // Force align 2021
-                estimatedVal = actualVal;
-            } else {
-                // 2022+ Past: Cost * Rate
-                estimatedVal = cost * rateDiv;
-            }
-        } else {
-            // Future Estimation: 
-            // Assumes reinvestment: Principal grows by (1+rate)^n
-            // Dividend Income = Projected Principal * Rate
-            const yearsSinceCurrent = y - currentYear;
-            const projectedPrincipal = currentCost * Math.pow(1 + rateDiv, yearsSinceCurrent);
-            estimatedVal = projectedPrincipal * rateDiv;
-        }
+    // Formula: Future Value = PV * (1 + r)^n
+    // Start from Year 0 (Current Year)
+    
+    for (let y = currentYear; y <= endYear; y++) {
+        const yearsPassed = y - currentYear;
+        const futureValue = currentCost * Math.pow(1 + rateDiv, yearsPassed);
 
         chartData.push({
             year: y,
-            actual: actualVal,
-            estimated: Math.round(estimatedVal)
+            // Only show 'Actual' dot for the starting year to indicate the base
+            actual: y === currentYear ? currentCost : undefined,
+            estimated: Math.round(futureValue)
         });
     }
 
     return chartData;
-  }, [stocks, dividends, filteredSymbols, projectionYears, expectedDivRate]);
+  }, [stocks, filteredSymbols, projectionYears, expectedDivRate]);
 
   const handleRateChange = (val: string) => {
       setHasUserSetRates(true);
@@ -455,11 +408,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             />
         </div>
 
-        {/* Compound Interest Calculator Section */}
+        {/* Dividend Reinvestment Compound Interest Section */}
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md relative">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-start mb-6 gap-4">
                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold">股利收入複利預估 vs 實際股利收入</h2>
+                    <h2 className="text-xl font-semibold">股利再投資複利計算</h2>
                 </div>
                  <div className="w-full md:w-auto flex flex-wrap gap-3 items-end bg-light-bg dark:bg-dark-bg p-3 rounded-lg border border-light-border dark:border-dark-border">
                     <div>
@@ -487,7 +440,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                     </div>
                 </div>
             </div>
-            <CompoundInterestChart data={compoundInterestData} theme={theme} />
+            <CompoundInterestChart 
+                data={compoundInterestData} 
+                theme={theme} 
+                labelEstimated="預估持有成本"
+                labelActual="持有股票成本"
+            />
         </div>
     </div>
   );
