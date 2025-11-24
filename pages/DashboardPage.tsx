@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart } from '../components/PortfolioCharts';
@@ -22,6 +23,13 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
+
+  const heldSymbols = useMemo(() => {
+    return stocks.filter(stock => {
+        const financials = calculateStockFinancials(stock);
+        return financials.currentShares > 0;
+    }).map(stock => stock.symbol);
+  }, [stocks]);
 
   const dashboardData = useMemo(() => {
     const symbolsSet = new Set(filteredSymbols);
@@ -151,7 +159,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <h1 className="text-3xl font-bold hidden md:block">儀表板</h1>
+        <h1 className="text-3xl font-bold hidden md:block">股票總覽</h1>
         <div className="flex flex-col sm:flex-row gap-4">
             <YearFilterDropdown
                 availableYears={availableYears}
@@ -162,6 +170,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                 allSymbols={allStockSymbols}
                 selectedSymbols={filteredSymbols}
                 onChange={onFilterChange}
+                heldSymbols={heldSymbols}
             />
         </div>
       </div>

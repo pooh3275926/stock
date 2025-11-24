@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { EllipsisVerticalIcon, EditIcon, TrashIcon, PlusIcon, MinusIcon, SearchIcon, SortAscendingIcon, SortDescendingIcon, ArrowUpIcon, ChevronDownIcon } from './Icons';
 
@@ -85,7 +86,8 @@ export const StockFilterDropdown: React.FC<{
   allSymbols: string[];
   selectedSymbols: string[];
   onChange: (selected: string[]) => void;
-}> = ({ allSymbols, selectedSymbols, onChange }) => {
+  heldSymbols?: string[];
+}> = ({ allSymbols, selectedSymbols, onChange, heldSymbols }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +113,10 @@ export const StockFilterDropdown: React.FC<{
   };
   
   const isAllSelected = allSymbols.length > 0 && selectedSymbols.length === allSymbols.length;
+  const isHeldSelected = heldSymbols && heldSymbols.length > 0 && 
+                         selectedSymbols.length === heldSymbols.length && 
+                         heldSymbols.every(s => selectedSymbols.includes(s));
+
   const buttonText = isAllSelected ? `篩選股票 (全部 ${allSymbols.length})` : `篩選股票 (${selectedSymbols.length}/${allSymbols.length})`;
 
   return (
@@ -124,7 +130,7 @@ export const StockFilterDropdown: React.FC<{
       </button>
       {isOpen && (
         <div className="absolute right-0 mt-2 w-full bg-light-card dark:bg-dark-card rounded-md shadow-lg z-30 border border-light-border dark:border-dark-border max-h-60 overflow-y-auto">
-          <div className="p-3 border-b border-light-border dark:border-dark-border">
+          <div className="p-3 border-b border-light-border dark:border-dark-border space-y-2">
             <label className="flex items-center space-x-3 cursor-pointer">
               <input 
                 type="checkbox" 
@@ -134,6 +140,17 @@ export const StockFilterDropdown: React.FC<{
               />
               <span className="font-semibold">全選</span>
             </label>
+            {heldSymbols && heldSymbols.length > 0 && (
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary"
+                    checked={isHeldSelected || false} 
+                    onChange={() => onChange(isHeldSelected ? [] : heldSymbols)}
+                  />
+                  <span className="font-semibold">持有中</span>
+                </label>
+            )}
           </div>
           <div className="p-1">
             {allSymbols.map(symbol => (
