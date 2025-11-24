@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 // FIX: Added AreaChart to the import from recharts to resolve 'Cannot find name' errors.
 import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart } from 'recharts';
@@ -164,8 +165,15 @@ interface CompoundInterestChartData {
 interface CompoundInterestChartProps {
     data: CompoundInterestChartData[];
     theme: 'light' | 'dark';
+    labelEstimated?: string;
+    labelActual?: string;
 }
-export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ data, theme }) => {
+export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ 
+    data, 
+    theme, 
+    labelEstimated = "預估股利收入", 
+    labelActual = "實際股利收入" 
+}) => {
     const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
     const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
     const tooltipStyle = {
@@ -197,8 +205,8 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ da
                     formatter={(value: number) => formatCurrency(value, 'TWD')}
                 />
                 <Legend />
-                <Area type="monotone" dataKey="estimated" stroke={COLOR_PRIMARY} fillOpacity={1} fill="url(#colorEstimated)" name="預估資產 (含息)" />
-                <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name="實際資產 (修正成本)" />
+                <Area type="monotone" dataKey="estimated" stroke={COLOR_PRIMARY} fillOpacity={1} fill="url(#colorEstimated)" name={labelEstimated} />
+                <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name={labelActual} />
             </ComposedChart>
         </ResponsiveContainer>
     );

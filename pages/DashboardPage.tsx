@@ -25,7 +25,6 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
 
   const [projectionYears, setProjectionYears] = useState<number>(30);
-  const [expectedPnlRate, setExpectedPnlRate] = useState<number>(5);
   const [expectedDivRate, setExpectedDivRate] = useState<number>(5);
   const [hasUserSetRates, setHasUserSetRates] = useState(false);
 
@@ -114,15 +113,50 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const totalReturnRate = totalCurrentCost > 0 ? (totalReturn / totalCurrentCost) * 100 : 0;
     const dividendYield = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) * 100 : 0;
     
-    // Auto-calculate default annualized rates for the calculator (CAGR approximation)
-    const investmentYears = Math.max(1, new Date().getFullYear() - 2021);
-    
-    const totalUnrealizedRate = totalCurrentCost > 0 ? (unrealizedPnl / totalCurrentCost) : 0;
-    // (1 + total)^ (1/n) - 1
-    const annualizedPnlRate = (Math.pow(1 + totalUnrealizedRate, 1 / investmentYears) - 1) * 100;
+    // Calculate Average Historical Dividend Yield for default rate
+    let historicalAvgYield = 0;
+    const startYear = 2021;
+    const currentYear = new Date().getFullYear();
+    let yieldSum = 0;
+    let yieldCount = 0;
 
-    const totalDividendRate = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) : 0;
-    const annualizedDivRate = (Math.pow(1 + totalDividendRate, 1 / investmentYears) - 1) * 100;
+    // Helper to get cost for a specific year (duplicated logic for accuracy)
+    const getCostForYear = (year: number) => {
+        const yearEndDate = new Date(year, 11, 31, 23, 59, 59);
+        let yearCost = 0;
+        relevantStocksBase.forEach(stock => {
+            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const buyQueue: {shares: number, cost: number}[] = [];
+            txUntilDate.forEach(t => {
+                if(t.type === 'BUY') {
+                    buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
+                } else {
+                    let sellShares = t.shares;
+                    while(sellShares > 0 && buyQueue.length > 0) {
+                        const b = buyQueue[0];
+                        const take = Math.min(sellShares, b.shares);
+                        b.shares -= take;
+                        b.cost -= take * (b.cost / (b.shares + take)); // Approximation
+                        sellShares -= take;
+                        if(b.shares <= 0.0001) buyQueue.shift();
+                    }
+                }
+            });
+            yearCost += buyQueue.reduce((s, b) => s + b.cost, 0);
+        });
+        return yearCost;
+    };
+
+    for(let y = startYear; y <= currentYear; y++) {
+        const yDividends = relevantDividendsBase.filter(d => new Date(d.date).getFullYear() === y).reduce((sum, d) => sum + d.amount, 0);
+        const yCost = getCostForYear(y);
+        if (yCost > 0) {
+            yieldSum += (yDividends / yCost);
+            yieldCount++;
+        }
+    }
+    historicalAvgYield = yieldCount > 0 ? (yieldSum / yieldCount) * 100 : 5;
+
 
     const contributionData = activeStocksForCharts.map(stock => {
         const financials = calculateStockFinancials(stock);
@@ -168,156 +202,171 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       topPnl, bottomPnl,
       topTotalReturn, bottomTotalReturn,
       topYield, bottomYield,
-      annualizedPnlRate,
-      annualizedDivRate
+      historicalAvgYield
     };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
   // Update default rates once based on calculation
   useEffect(() => {
     if (!hasUserSetRates) {
-        const pnl = Math.max(0, parseFloat(dashboardData.annualizedPnlRate.toFixed(1)));
-        const div = Math.max(0, parseFloat(dashboardData.annualizedDivRate.toFixed(1)));
-        if (!isNaN(pnl) && pnl !== 0) setExpectedPnlRate(pnl);
+        const div = Math.max(0, parseFloat(dashboardData.historicalAvgYield.toFixed(2)));
         if (!isNaN(div) && div !== 0) setExpectedDivRate(div);
     }
-  }, [dashboardData.annualizedPnlRate, dashboardData.annualizedDivRate, hasUserSetRates]);
+  }, [dashboardData.historicalAvgYield, hasUserSetRates]);
 
 
-  // --- Compound Interest Calculation Logic ---
+  // --- Annual Dividend Projection vs Actual Logic ---
+  const annualDividendComparisonData = useMemo(() => {
+    const startYear = 2021;
+    const currentYear = new Date().getFullYear();
+    const chartData: { year: number; actual: number; estimated: number }[] = [];
+    const yieldHistory: number[] = [];
+
+    const symbolsSet = new Set(filteredSymbols);
+    const chartStocks = stocks.filter(s => symbolsSet.has(s.symbol));
+    const chartDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
+
+    for (let y = startYear; y <= currentYear; y++) {
+         const yearEndDate = new Date(y, 11, 31, 23, 59, 59);
+         
+         // Calculate Total Held Cost at year end
+         let yearCost = 0;
+         chartStocks.forEach(stock => {
+            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const buyQueue: {shares: number, cost: number}[] = [];
+            
+            txUntilDate.forEach(t => {
+                if(t.type === 'BUY') {
+                    buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
+                } else {
+                    let sellShares = t.shares;
+                    while(sellShares > 0 && buyQueue.length > 0) {
+                        const b = buyQueue[0];
+                        const take = Math.min(sellShares, b.shares);
+                        const costPerShare = b.cost / b.shares;
+                        b.shares -= take;
+                        b.cost -= take * costPerShare;
+                        sellShares -= take;
+                        if(b.shares <= 0.0001) buyQueue.shift();
+                    }
+                }
+            });
+            yearCost += buyQueue.reduce((s, b) => s + b.cost, 0);
+         });
+
+         const yearDividend = chartDividends
+            .filter(d => new Date(d.date).getFullYear() === y)
+            .reduce((sum, d) => sum + d.amount, 0);
+
+         // Calculate Estimated for current year Y
+         let estimated = 0;
+         if (y === startYear) {
+             estimated = yearDividend;
+         } else {
+             const avgYield = yieldHistory.length > 0 
+                ? yieldHistory.reduce((a, b) => a + b, 0) / yieldHistory.length 
+                : 0;
+             estimated = yearCost * avgYield;
+         }
+
+         // Store current yield for future estimations
+         // Avoid NaN or Infinity if cost is 0
+         if (yearCost > 0) {
+             yieldHistory.push(yearDividend / yearCost);
+         } else {
+             yieldHistory.push(0);
+         }
+
+         chartData.push({
+             year: y,
+             actual: yearDividend,
+             estimated: Math.round(estimated)
+         });
+    }
+
+    return chartData;
+  }, [stocks, dividends, filteredSymbols]);
+
+
+  // --- Compound Interest (Dividend Growth) Calculation Logic ---
   const compoundInterestData = useMemo(() => {
     const startYear = 2021;
     const currentYear = new Date().getFullYear();
     const endYear = startYear + projectionYears;
     const chartData: { year: number; actual?: number; estimated: number }[] = [];
 
-    // Filter stocks and dividends by the currently selected symbols (independent of year filter)
     const symbolsSet = new Set(filteredSymbols);
     const chartStocks = stocks.filter(s => symbolsSet.has(s.symbol));
     const chartDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
 
-    // Helper to calculate stats for a specific historical year
-    const getStatsByYear = (year: number) => {
-        const yearEndDate = new Date(year, 11, 31, 23, 59, 59);
-        let yearTotalMarketValue = 0;
-        let yearCumulativeRealized = 0;
-        let yearCost = 0;
+    // 1. Prepare historical cost and dividend data
+    const historyData = new Map<number, { cost: number; dividend: number }>();
 
-        chartStocks.forEach(stock => {
-            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate);
-            if (txUntilDate.length === 0) return;
-
-            // Need price at that year end
-            const histPrice = getHistoricalPriceAsOf(stock.symbol, year, 12, historicalPrices);
-            
-            // Recalculate financial state
-            let shares = 0;
-            let soldPnL = 0;
+    for (let y = startYear; y <= currentYear; y++) {
+         const yearEndDate = new Date(y, 11, 31, 23, 59, 59);
+         
+         // Calculate Total Held Cost at year end
+         let yearCost = 0;
+         chartStocks.forEach(stock => {
+            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             const buyQueue: {shares: number, cost: number}[] = [];
             
-            // Transaction replay logic
-            const sortedTx = [...txUntilDate].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            
-            sortedTx.forEach(t => {
+            txUntilDate.forEach(t => {
                 if(t.type === 'BUY') {
                     buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
-                    shares += t.shares;
                 } else {
                     let sellShares = t.shares;
-                    shares -= t.shares;
-                    let costSold = 0;
                     while(sellShares > 0 && buyQueue.length > 0) {
                         const b = buyQueue[0];
                         const take = Math.min(sellShares, b.shares);
                         const costPerShare = b.cost / b.shares;
-                        costSold += take * costPerShare;
                         b.shares -= take;
                         b.cost -= take * costPerShare;
                         sellShares -= take;
                         if(b.shares <= 0.0001) buyQueue.shift();
                     }
-                    const proceeds = t.shares * t.price - t.fees;
-                    soldPnL += (proceeds - costSold);
                 }
             });
+            yearCost += buyQueue.reduce((s, b) => s + b.cost, 0);
+         });
 
-            // Calculate Remaining Cost for held shares (Total Principal Invested at that time)
-            const remainingCost = buyQueue.reduce((s, b) => s + b.cost, 0);
-            yearCost += remainingCost;
-
-            const finalPrice = histPrice !== null ? histPrice : (
-                 txUntilDate.length > 0 ? txUntilDate[txUntilDate.length - 1].price : stock.currentPrice
-            );
-            
-            yearTotalMarketValue += (shares * finalPrice);
-            yearCumulativeRealized += soldPnL;
-        });
-
-        const dividendsUntilDate = chartDividends
-            .filter(d => new Date(d.date) <= yearEndDate)
+         const yearDividend = chartDividends
+            .filter(d => new Date(d.date).getFullYear() === y)
             .reduce((sum, d) => sum + d.amount, 0);
+        
+         historyData.set(y, { cost: yearCost, dividend: yearDividend });
+    }
 
-        // Unrealized PnL = MarketValue - Cost
-        const yearUnrealized = yearTotalMarketValue - yearCost;
-
-        return {
-            cost: yearCost,
-            marketValue: yearTotalMarketValue,
-            cumDiv: dividendsUntilDate,
-            realizedPnl: yearCumulativeRealized,
-            unrealizedPnl: yearUnrealized
-        };
-    };
-
-    // 1. Get Baseline (2021)
-    const baseline = getStatsByYear(startYear);
-    const baseCost = baseline.cost;
-    const baseCumDiv = baseline.cumDiv;
-    const baseMarketValue = baseline.marketValue;
-    const baseRealized = baseline.realizedPnl;
-    
-    const actual2021 = baseMarketValue + baseCumDiv + baseRealized;
-
-    // Calculate Offset for Estimation to ensure Estimated(2021) == Actual(2021)
-    // Formula per requirement:
-    // P1 = (BaseCost + BaseDiv) * (1+DivRate)^n
-    // P2 = BaseCost * (1+PnlRate)^n
-    // Estimated_Raw = P1 + P2
-    // We want Estimated_Final(0) = Actual(2021)
-    // Estimated_Final(n) = Estimated_Raw(n) - (Estimated_Raw(0) - Actual(2021))
-    
-    const ratePnl = expectedPnlRate / 100;
     const rateDiv = expectedDivRate / 100;
-    
-    // n=0 values
-    const rawEst0 = (baseCost + baseCumDiv) + baseCost;
-    const calibrationOffset = actual2021 - rawEst0;
+    const currentCost = historyData.get(currentYear)?.cost || 0;
 
-    // 2. Build Series
+    // 2. Build Chart Data
     for (let y = startYear; y <= endYear; y++) {
-        const n = y - startYear;
-        
-        // --- Actual Calculation ---
         let actualVal: number | undefined = undefined;
-        
+        let estimatedVal = 0;
+
         if (y <= currentYear) {
-            const currentStats = getStatsByYear(y);
-            // Actual Asset = MarketValue + CumDiv + RealizedPnl
-            const totalAsset = currentStats.marketValue + currentStats.cumDiv + currentStats.realizedPnl;
-            // Adjustment: Subtract principal injected after 2021 to show organic growth relative to 2021 base
-            const costChange = currentStats.cost - baseCost;
-            actualVal = totalAsset - costChange;
+            const data = historyData.get(y);
+            actualVal = data?.dividend || 0;
+            const cost = data?.cost || 0;
+            
+            // Past Estimation: Based on Actual Cost * User Rate
+            // User requested: 2021 Actual = Estimated.
+            if (y === startYear) {
+                // Force align 2021
+                estimatedVal = actualVal;
+            } else {
+                // 2022+ Past: Cost * Rate
+                estimatedVal = cost * rateDiv;
+            }
+        } else {
+            // Future Estimation: 
+            // Assumes reinvestment: Principal grows by (1+rate)^n
+            // Dividend Income = Projected Principal * Rate
+            const yearsSinceCurrent = y - currentYear;
+            const projectedPrincipal = currentCost * Math.pow(1 + rateDiv, yearsSinceCurrent);
+            estimatedVal = projectedPrincipal * rateDiv;
         }
-
-        // --- Estimated Calculation ---
-        // Part 1: Dividend Compounding Wealth
-        const part1 = (baseCost + baseCumDiv) * Math.pow(1 + rateDiv, n);
-        
-        // Part 2: P&L Compounding Wealth
-        const part2 = baseCost * Math.pow(1 + ratePnl, n);
-
-        // Total with Calibration
-        const estimatedVal = part1 + part2 + calibrationOffset;
 
         chartData.push({
             year: y,
@@ -327,13 +376,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     }
 
     return chartData;
-  }, [stocks, dividends, filteredSymbols, historicalPrices, projectionYears, expectedPnlRate, expectedDivRate]); // Depend on filteredSymbols, but NOT selectedYear
+  }, [stocks, dividends, filteredSymbols, projectionYears, expectedDivRate]);
 
-  const handleRateChange = (type: 'pnl' | 'div', val: string) => {
+  const handleRateChange = (val: string) => {
       setHasUserSetRates(true);
       const num = parseFloat(val);
-      if (type === 'pnl') setExpectedPnlRate(num);
-      else setExpectedDivRate(num);
+      if (!isNaN(num)) setExpectedDivRate(num);
   };
 
 
@@ -396,11 +444,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             <AdvancedMonthlyDividendChart dividends={dashboardData.dividendsForChart} theme={theme} />
         </div>
 
+        {/* Projected Annual Dividend vs Actual Annual Dividend */}
+        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-6">預估年度股利 vs 實際股利收入</h2>
+            <CompoundInterestChart 
+                data={annualDividendComparisonData} 
+                theme={theme} 
+                labelEstimated="預估年度股利"
+                labelActual="實際年度股利"
+            />
+        </div>
+
         {/* Compound Interest Calculator Section */}
         <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md relative">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-start mb-6 gap-4">
                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold">複利成長預估 vs 實際資產</h2>
+                    <h2 className="text-xl font-semibold">股利收入複利預估 vs 實際股利收入</h2>
                 </div>
                  <div className="w-full md:w-auto flex flex-wrap gap-3 items-end bg-light-bg dark:bg-dark-bg p-3 rounded-lg border border-light-border dark:border-dark-border">
                     <div>
@@ -417,21 +476,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                         </select>
                     </div>
                      <div>
-                        <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">預估未實現損益率 (%)</label>
-                        <input 
-                            type="number" 
-                            value={expectedPnlRate} 
-                            onChange={(e) => handleRateChange('pnl', e.target.value)}
-                            className="p-1.5 w-full md:w-24 bg-light-card dark:bg-dark-card border border-light-border dark:border-dark-border rounded text-sm"
-                            step="0.1"
-                        />
-                    </div>
-                     <div>
-                        <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">預估累計股利率 (%)</label>
+                        <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">平均年股利率 (%)</label>
                         <input 
                             type="number" 
                             value={expectedDivRate} 
-                            onChange={(e) => handleRateChange('div', e.target.value)}
+                            onChange={(e) => handleRateChange(e.target.value)}
                             className="p-1.5 w-full md:w-24 bg-light-card dark:bg-dark-card border border-light-border dark:border-dark-border rounded text-sm"
                             step="0.1"
                         />
