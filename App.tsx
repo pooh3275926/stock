@@ -692,7 +692,7 @@ const allNavItems = [
 ];
 
 const mainBottomNavItems = [
-    { id: 'DASHBOARD', icon: DashboardIcon, label: '股票總覽' }, 
+    { id: 'DASHBOARD', icon: DashboardIcon, label: '總覽' }, 
     { id: 'PORTFOLIO', icon: PortfolioIcon, label: '我的持股' }, 
     { id: 'DIVIDENDS', icon: DividendIcon, label: '股利紀錄' },
     { id: 'TOTAL_RETURN', icon: ChartBarSquareIcon, label: '含息損益' },

@@ -64,7 +64,7 @@ export const TotalReturnPage: React.FC<TotalReturnPageProps> = ({ stocks, divide
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold hidden md:block">含息損益 (持有中)</h1>
+      <h1 className="text-3xl font-bold hidden md:block">含息損益</h1>
       
       <div className="flex items-center gap-4">
           <div className="flex-grow">
