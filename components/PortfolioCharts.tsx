@@ -167,12 +167,14 @@ interface CompoundInterestChartProps {
     theme: 'light' | 'dark';
     labelEstimated?: string;
     labelActual?: string;
+    hideActual?: boolean;
 }
 export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ 
     data, 
     theme, 
     labelEstimated = "預估股利收入", 
-    labelActual = "實際股利收入" 
+    labelActual = "實際股利收入",
+    hideActual = false
 }) => {
     const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
     const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
@@ -206,7 +208,7 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({
                 />
                 <Legend />
                 <Area type="monotone" dataKey="estimated" stroke={COLOR_PRIMARY} fillOpacity={1} fill="url(#colorEstimated)" name={labelEstimated} />
-                <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name={labelActual} />
+                {!hideActual && <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name={labelActual} />}
             </ComposedChart>
         </ResponsiveContainer>
     );

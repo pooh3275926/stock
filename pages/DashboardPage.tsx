@@ -26,6 +26,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
 
   const [projectionYears, setProjectionYears] = useState<number>(30);
   const [expectedDivRate, setExpectedDivRate] = useState<number>(5);
+  const [annualContribution, setAnnualContribution] = useState<number>(0); // New: Annual Contribution
   const [hasUserSetRates, setHasUserSetRates] = useState(false);
 
   const heldSymbols = useMemo(() => {
@@ -113,50 +114,43 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const totalReturnRate = totalCurrentCost > 0 ? (totalReturn / totalCurrentCost) * 100 : 0;
     const dividendYield = totalCurrentCost > 0 ? (totalDividends / totalCurrentCost) * 100 : 0;
     
-    // Calculate Average Historical Dividend Yield for default rate
-    let historicalAvgYield = 0;
-    const startYear = 2021;
-    const currentYear = new Date().getFullYear();
-    let yieldSum = 0;
-    let yieldCount = 0;
+    // --- NEW: Average Annual Dividend Yield Calculation ---
+    // Formula: Latest Cumulative Dividends / Latest Total Cost / Number of Years
+    let avgYieldForCalc = 5;
+    
+    // 1. Get Latest Cumulative Dividends (Total Dividends of currently selected stocks/filter)
+    const cumulativeDividends = relevantDividendsBase.reduce((sum, d) => sum + d.amount, 0);
 
-    // Helper to get cost for a specific year (duplicated logic for accuracy)
-    const getCostForYear = (year: number) => {
-        const yearEndDate = new Date(year, 11, 31, 23, 59, 59);
-        let yearCost = 0;
-        relevantStocksBase.forEach(stock => {
-            const txUntilDate = stock.transactions.filter(t => new Date(t.date) <= yearEndDate).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            const buyQueue: {shares: number, cost: number}[] = [];
-            txUntilDate.forEach(t => {
-                if(t.type === 'BUY') {
-                    buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
-                } else {
-                    let sellShares = t.shares;
-                    while(sellShares > 0 && buyQueue.length > 0) {
-                        const b = buyQueue[0];
-                        const take = Math.min(sellShares, b.shares);
-                        b.shares -= take;
-                        b.cost -= take * (b.cost / (b.shares + take)); // Approximation
-                        sellShares -= take;
-                        if(b.shares <= 0.0001) buyQueue.shift();
-                    }
-                }
-            });
-            yearCost += buyQueue.reduce((s, b) => s + b.cost, 0);
+    // 2. Get Latest Total Cost (Cost of currently held stocks, ignoring year filter for this calc to be "Latest")
+    // We calculate this fresh to ensure it represents the *current* portfolio state
+    let currentPortfolioCost = 0;
+    let earliestTxDate: number | null = null;
+
+    relevantStocksBase.forEach(s => {
+        const f = calculateStockFinancials(s);
+        currentPortfolioCost += f.totalCost; // Cost of currently held shares
+        
+        // Find earliest transaction to determine years
+        s.transactions.forEach(t => {
+            const tDate = new Date(t.date).getTime();
+            if (earliestTxDate === null || tDate < earliestTxDate) {
+                earliestTxDate = tDate;
+            }
         });
-        return yearCost;
-    };
+    });
 
-    for(let y = startYear; y <= currentYear; y++) {
-        const yDividends = relevantDividendsBase.filter(d => new Date(d.date).getFullYear() === y).reduce((sum, d) => sum + d.amount, 0);
-        const yCost = getCostForYear(y);
-        if (yCost > 0) {
-            yieldSum += (yDividends / yCost);
-            yieldCount++;
-        }
+    // 3. Calculate Years
+    let yearsDuration = 1;
+    const currentYearVal = new Date().getFullYear();
+    if (earliestTxDate) {
+        const startYear = new Date(earliestTxDate).getFullYear();
+        yearsDuration = Math.max(1, currentYearVal - startYear + 1); // e.g. 2021 to 2025 = 5 years
     }
-    historicalAvgYield = yieldCount > 0 ? (yieldSum / yieldCount) * 100 : 5;
 
+    // 4. Calculate Rate
+    if (currentPortfolioCost > 0 && yearsDuration > 0) {
+        avgYieldForCalc = (cumulativeDividends / currentPortfolioCost / yearsDuration) * 100;
+    }
 
     const contributionData = activeStocksForCharts.map(stock => {
         const financials = calculateStockFinancials(stock);
@@ -202,17 +196,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       topPnl, bottomPnl,
       topTotalReturn, bottomTotalReturn,
       topYield, bottomYield,
-      historicalAvgYield
+      avgYieldForCalc
     };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
   // Update default rates once based on calculation
   useEffect(() => {
     if (!hasUserSetRates) {
-        const div = Math.max(0, parseFloat(dashboardData.historicalAvgYield.toFixed(2)));
+        const div = Math.max(0, parseFloat(dashboardData.avgYieldForCalc.toFixed(2)));
         if (!isNaN(div) && div !== 0) setExpectedDivRate(div);
     }
-  }, [dashboardData.historicalAvgYield, hasUserSetRates]);
+  }, [dashboardData.avgYieldForCalc, hasUserSetRates]);
 
 
   // --- Annual Dividend Projection vs Actual Logic ---
@@ -293,17 +287,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const endYear = currentYear + projectionYears;
     const chartData: { year: number; actual?: number; estimated: number }[] = [];
 
-    // Principal: Current Total Cost of currently held stocks
-    // (We use dashboardData.stats.totalCost which respects filters if 'all' years selected, 
-    // or we can recalculate specifically for "Held" stocks if needed. 
-    // Usually "Dividend Reinvestment" implies re-investing based on current portfolio.)
-    
-    // NOTE: dashboardData.stats.totalCost is based on 'selectedYear'.
-    // If the user selects '2022' in the dropdown, stats.totalCost reflects 2022 cost.
-    // For a future projection, we ALWAYS want the CURRENT holding cost, regardless of the year filter selected on the dashboard.
-    // Let's recalculate current holding cost quickly for unfiltered projection base.
-    
     const symbolsSet = new Set(filteredSymbols);
+    // Principal is the Current Total Cost of currently held stocks (Current Snapshot)
     const currentCost = stocks
         .filter(s => symbolsSet.has(s.symbol))
         .reduce((sum, stock) => {
@@ -312,24 +297,29 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
         }, 0);
 
     const rateDiv = expectedDivRate / 100;
+    let currentBalance = currentCost;
 
-    // Formula: Future Value = PV * (1 + r)^n
-    // Start from Year 0 (Current Year)
-    
-    for (let y = currentYear; y <= endYear; y++) {
-        const yearsPassed = y - currentYear;
-        const futureValue = currentCost * Math.pow(1 + rateDiv, yearsPassed);
+    // Start Chart at Year 0 (Current Year)
+    chartData.push({
+        year: currentYear,
+        estimated: Math.round(currentBalance)
+    });
+
+    // Future Years
+    for (let y = currentYear + 1; y <= endYear; y++) {
+        // Compound interest on previous balance + Add Annual Contribution
+        // Assuming Contribution is added at the end of the year (or spread throughout, but simplified to annual compounding)
+        // Formula: Previous * (1 + r) + Contribution
+        currentBalance = (currentBalance * (1 + rateDiv)) + annualContribution;
 
         chartData.push({
             year: y,
-            // Only show 'Actual' dot for the starting year to indicate the base
-            actual: y === currentYear ? currentCost : undefined,
-            estimated: Math.round(futureValue)
+            estimated: Math.round(currentBalance)
         });
     }
 
     return chartData;
-  }, [stocks, filteredSymbols, projectionYears, expectedDivRate]);
+  }, [stocks, filteredSymbols, projectionYears, expectedDivRate, annualContribution]);
 
   const handleRateChange = (val: string) => {
       setHasUserSetRates(true);
@@ -426,7 +416,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                             <option value={20}>20 年</option>
                             <option value={30}>30 年</option>
                             <option value={40}>40 年</option>
+                            <option value={50}>50 年</option>
+                            <option value={60}>60 年</option>
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">預估每年增資</label>
+                         <input 
+                            type="number" 
+                            value={annualContribution} 
+                            onChange={(e) => setAnnualContribution(Number(e.target.value))}
+                            className="p-1.5 w-full md:w-28 bg-light-card dark:bg-dark-card border border-light-border dark:border-dark-border rounded text-sm"
+                            step="1000"
+                        />
                     </div>
                      <div>
                         <label className="block text-xs font-medium text-light-text/70 dark:text-dark-text/70 mb-1">平均年股利率 (%)</label>
@@ -443,8 +445,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             <CompoundInterestChart 
                 data={compoundInterestData} 
                 theme={theme} 
-                labelEstimated="預估持有成本"
-                labelActual="持有股票成本"
+                labelEstimated="預估複利總值"
+                hideActual={true}
             />
         </div>
     </div>
