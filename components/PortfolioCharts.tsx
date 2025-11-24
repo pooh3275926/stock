@@ -178,7 +178,7 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ da
 
     return (
         <ResponsiveContainer width="100%" height={350}>
-            <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                     <linearGradient id="colorEstimated" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={COLOR_PRIMARY} stopOpacity={0.2} />
@@ -186,7 +186,10 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ da
                     </linearGradient>
                 </defs>
                 <XAxis dataKey="year" stroke={axisColor} />
-                <YAxis stroke={axisColor} tickFormatter={(val) => `NT$${(val / 10000).toFixed(0)}萬`} />
+                <YAxis 
+                    stroke={axisColor} 
+                    tickFormatter={(val) => val === 0 ? '' : `${(val / 10000).toFixed(0)}W`} 
+                />
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                 <Tooltip
                     contentStyle={tooltipStyle}
@@ -195,7 +198,7 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ da
                 />
                 <Legend />
                 <Area type="monotone" dataKey="estimated" stroke={COLOR_PRIMARY} fillOpacity={1} fill="url(#colorEstimated)" name="預估資產 (含息)" />
-                <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name="實際資產" />
+                <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name="實際資產 (修正成本)" />
             </ComposedChart>
         </ResponsiveContainer>
     );
