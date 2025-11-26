@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { KpiCard } from '../components/KpiCard';
-import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart } from '../components/PortfolioCharts';
+import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart, ReturnTrendChart } from '../components/PortfolioCharts';
 import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice, getHistoricalPriceAsOf } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
@@ -28,6 +28,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
   const [expectedDivRate, setExpectedDivRate] = useState<number>(5);
   const [annualContribution, setAnnualContribution] = useState<number>(0); // New: Annual Contribution
   const [hasUserSetRates, setHasUserSetRates] = useState(false);
+  const [includeDividendsInTrend, setIncludeDividendsInTrend] = useState(true);
 
   const heldSymbols = useMemo(() => {
     return stocks.filter(stock => {
@@ -196,7 +197,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       topPnl, bottomPnl,
       topTotalReturn, bottomTotalReturn,
       topYield, bottomYield,
-      avgYieldForCalc
+      avgYieldForCalc,
+      relevantStocksBase // Exposed for trend chart calculation
     };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
@@ -327,6 +329,126 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       if (!isNaN(num)) setExpectedDivRate(num);
   };
 
+  // --- Return Rate Trend Logic ---
+  const returnTrendData = useMemo(() => {
+    const chartData: { date: string; returnRate: number }[] = [];
+    const symbolsSet = new Set(filteredSymbols);
+    const chartStocks = stocks.filter(s => symbolsSet.has(s.symbol));
+    const chartDividends = dividends.filter(d => symbolsSet.has(d.stockSymbol));
+
+    // Determine Date Range
+    let startDate: Date;
+    let endDate = new Date();
+    
+    if (selectedYear === 'all') {
+        // Find earliest transaction
+        let minDate = new Date().getTime();
+        chartStocks.forEach(s => {
+            s.transactions.forEach(t => {
+                const d = new Date(t.date).getTime();
+                if(d < minDate) minDate = d;
+            });
+        });
+        startDate = new Date(minDate);
+    } else {
+        startDate = new Date(selectedYear, 0, 1);
+        endDate = new Date(selectedYear, 11, 31);
+        if(endDate > new Date()) endDate = new Date(); // Cap at today if selecting current year
+    }
+    
+    // Iterate month by month
+    const currentDateIterator = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endIterator = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // End of month
+
+    while (currentDateIterator <= endIterator) {
+        const year = currentDateIterator.getFullYear();
+        const month = currentDateIterator.getMonth() + 1;
+        const monthLabel = `${year}-${String(month).padStart(2, '0')}`;
+        const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+
+        let totalCostAtMonth = 0;
+        let marketValueAtMonth = 0;
+        
+        // Calculate portfolio state at endOfMonth
+        chartStocks.forEach(stock => {
+            const txUntilDate = stock.transactions
+                .filter(t => new Date(t.date) <= endOfMonth)
+                .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            if (txUntilDate.length === 0) return;
+
+            // Reconstruct holdings
+            const buyQueue: {shares: number, cost: number}[] = [];
+            txUntilDate.forEach(t => {
+                if(t.type === 'BUY') {
+                    buyQueue.push({shares: t.shares, cost: t.shares * t.price + t.fees});
+                } else {
+                    let sellShares = t.shares;
+                    while(sellShares > 0 && buyQueue.length > 0) {
+                        const b = buyQueue[0];
+                        const take = Math.min(sellShares, b.shares);
+                        const costPerShare = b.cost / b.shares;
+                        b.shares -= take;
+                        b.cost -= take * costPerShare;
+                        sellShares -= take;
+                        if(b.shares <= 0.0001) buyQueue.shift();
+                    }
+                }
+            });
+            
+            const sharesHeld = buyQueue.reduce((s, b) => s + b.shares, 0);
+            const stockCost = buyQueue.reduce((s, b) => s + b.cost, 0);
+            
+            if (sharesHeld > 0) {
+                totalCostAtMonth += stockCost;
+                
+                // Determine price
+                const historicalPrice = getHistoricalPriceAsOf(stock.symbol, year, month, historicalPrices);
+                let priceToUse = 0;
+                
+                if (historicalPrice !== null) {
+                    priceToUse = historicalPrice;
+                } else {
+                    // Fallback 1: Last transaction price before endOfMonth
+                    const lastTx = txUntilDate[txUntilDate.length - 1];
+                    if (lastTx) {
+                        priceToUse = lastTx.price;
+                    } else {
+                        // Fallback 2: Current price (last resort)
+                        priceToUse = stock.currentPrice;
+                    }
+                }
+                marketValueAtMonth += sharesHeld * priceToUse;
+            }
+        });
+
+        // Accumulate Dividends if enabled
+        let accumulatedDividends = 0;
+        if (includeDividendsInTrend) {
+            accumulatedDividends = chartDividends
+                .filter(d => new Date(d.date) <= endOfMonth)
+                .reduce((sum, d) => sum + d.amount, 0);
+        }
+
+        let returnRate = 0;
+        if (totalCostAtMonth > 0) {
+            // (MarketValue - Cost + Divs) / Cost
+            returnRate = ((marketValueAtMonth - totalCostAtMonth + accumulatedDividends) / totalCostAtMonth) * 100;
+        }
+
+        chartData.push({
+            date: monthLabel,
+            returnRate
+        });
+
+        // Next month
+        currentDateIterator.setMonth(currentDateIterator.getMonth() + 1);
+    }
+
+    return chartData;
+
+  }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices, includeDividendsInTrend]);
+
 
   return (
     <div className="space-y-8">
@@ -385,6 +507,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-center">年度股利收入</h2>
             <AdvancedMonthlyDividendChart dividends={dashboardData.dividendsForChart} theme={theme} />
+        </div>
+
+        {/* Return Rate Trend Chart */}
+        <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-xl font-semibold">報酬率趨勢圖</h2>
+                <div className="flex items-center space-x-2 bg-light-bg dark:bg-dark-bg p-2 rounded-lg border border-light-border dark:border-dark-border">
+                    <input 
+                        type="checkbox" 
+                        id="includeDivTrend"
+                        checked={includeDividendsInTrend} 
+                        onChange={(e) => setIncludeDividendsInTrend(e.target.checked)}
+                        className="form-checkbox h-5 w-5 text-primary bg-light-card dark:bg-dark-card border-light-border dark:border-dark-border rounded focus:ring-primary"
+                    />
+                    <label htmlFor="includeDivTrend" className="text-sm font-medium text-light-text dark:text-dark-text cursor-pointer select-none">
+                        計算股息
+                    </label>
+                </div>
+            </div>
+            <ReturnTrendChart 
+                data={returnTrendData} 
+                theme={theme} 
+                includeDividends={includeDividendsInTrend}
+            />
         </div>
 
         {/* Projected Annual Dividend vs Actual Annual Dividend */}

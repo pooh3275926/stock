@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 // FIX: Added AreaChart to the import from recharts to resolve 'Cannot find name' errors.
-import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart } from 'recharts';
+import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart, LineChart } from 'recharts';
 import { Stock, Dividend, Transaction, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
@@ -210,6 +210,56 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({
                 <Area type="monotone" dataKey="estimated" stroke={COLOR_PRIMARY} fillOpacity={1} fill="url(#colorEstimated)" name={labelEstimated} />
                 {!hideActual && <Line type="monotone" dataKey="actual" stroke={COLOR_SUCCESS} strokeWidth={3} dot={{ r: 4 }} name={labelActual} />}
             </ComposedChart>
+        </ResponsiveContainer>
+    );
+};
+
+// --- Return Rate Trend Chart ---
+interface ReturnTrendChartData {
+    date: string; // YYYY-MM
+    returnRate: number;
+}
+interface ReturnTrendChartProps {
+    data: ReturnTrendChartData[];
+    theme: 'light' | 'dark';
+    includeDividends: boolean;
+}
+export const ReturnTrendChart: React.FC<ReturnTrendChartProps> = ({ data, theme, includeDividends }) => {
+    if (!data || data.length === 0) {
+        return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
+    }
+
+    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
+    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
+    const tooltipStyle = {
+        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
+        border: '1px solid',
+        borderColor: gridColor,
+        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
+        borderRadius: '0.5rem',
+    };
+
+    return (
+        <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false}/>
+                <XAxis dataKey="date" stroke={axisColor} />
+                <YAxis stroke={axisColor} tickFormatter={(value) => `${value.toFixed(0)}%`}/>
+                <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
+                    formatter={(value: number) => `${value.toFixed(2)}%`}
+                />
+                <Legend />
+                <Line 
+                    type="monotone" 
+                    dataKey="returnRate" 
+                    stroke={includeDividends ? COLOR_SUCCESS : COLOR_DANGER} 
+                    strokeWidth={3} 
+                    dot={false}
+                    name={includeDividends ? "含息報酬率" : "未實現損益率"} 
+                />
+            </LineChart>
         </ResponsiveContainer>
     );
 };
