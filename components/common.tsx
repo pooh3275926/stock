@@ -231,8 +231,7 @@ export const StockFilterDropdown: React.FC<{
              <select 
                 value={filterType} 
                 onChange={(e) => handleTypeChange(e.target.value)}
-                disabled={!filterMarket}
-                className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card disabled:opacity-50"
+                className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card"
              >
                  <option value="">所有類型</option>
                  {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -241,8 +240,7 @@ export const StockFilterDropdown: React.FC<{
              <select 
                 value={filterIndustry} 
                 onChange={(e) => setFilterIndustry(e.target.value)}
-                disabled={!filterType && !filterMarket}
-                className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card disabled:opacity-50"
+                className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card"
              >
                  <option value="">所有產業/指數</option>
                  {availableIndustries.map(i => <option key={i} value={i}>{i}</option>)}
