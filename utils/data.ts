@@ -1,4 +1,5 @@
 
+
 export interface StockMetadata {
     name: string;
     market: '台股' | '美股';

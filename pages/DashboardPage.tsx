@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart, ReturnTrendChart, DistributionPieChart } from '../components/PortfolioCharts';
@@ -199,7 +200,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             if (def && (!filter || filter(def))) {
                 const financials = calculateStockFinancials(stock);
                 const key = groupBy(def);
-                dist[key] = (dist[key] || 0) + financials.marketValue;
+                dist[key] = (dist[key] || 0) + financials.marketValue; // Assuming user wants distribution by Market Value for "Investment Proportion"
             }
         });
         return Object.entries(dist)
@@ -621,11 +622,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             />
         </div>
 
-        {/* New Distribution Charts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md lg:col-span-3">
+        {/* New Distribution Charts - 2x2 Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
                  <h2 className="text-xl font-semibold mb-4 text-center">市場分布圖 (持有中)</h2>
                  <DistributionPieChart data={dashboardData.marketDistribution} theme={theme} />
+            </div>
+            <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+                 <h2 className="text-xl font-semibold mb-4 text-center">產業/指數分布圖 (持有中)</h2>
+                 <DistributionPieChart data={dashboardData.industryDistribution} theme={theme} />
             </div>
             <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
                  <h2 className="text-xl font-semibold mb-4 text-center">類型分布圖 - 台股 (持有中)</h2>
@@ -634,10 +639,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
              <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
                  <h2 className="text-xl font-semibold mb-4 text-center">類型分布圖 - 美股 (持有中)</h2>
                  <DistributionPieChart data={dashboardData.usTypeDistribution} theme={theme} />
-            </div>
-             <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
-                 <h2 className="text-xl font-semibold mb-4 text-center">產業/指數分布圖 (持有中)</h2>
-                 <DistributionPieChart data={dashboardData.industryDistribution} theme={theme} />
             </div>
         </div>
     </div>

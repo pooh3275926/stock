@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Stock, Settings, Transaction } from '../types';
 import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
@@ -43,14 +44,22 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, 
     }, []);
 
     const filteredStocks = useMemo(() => stocks.filter(stock => stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) || stock.name.toLowerCase().includes(searchTerm.toLowerCase())), [stocks, searchTerm]);
+    
+    // Calculate total cost of the portfolio to determine investment percentage
+    const totalPortfolioCost = useMemo(() => stocks.reduce((sum, stock) => sum + calculateStockFinancials(stock).totalCost, 0), [stocks]);
+
     const sortedStocks = useMemo(() => {
-        const withCalcs = filteredStocks.map(stock => ({ ...stock, ...calculateStockFinancials(stock) }));
+        const withCalcs = filteredStocks.map(stock => {
+            const financials = calculateStockFinancials(stock);
+            const investmentPercentage = totalPortfolioCost > 0 ? (financials.totalCost / totalPortfolioCost) * 100 : 0;
+            return { ...stock, ...financials, investmentPercentage };
+        });
         return [...withCalcs].sort((a, b) => {
             if (a[sortConfig.key as keyof typeof a] < b[sortConfig.key as keyof typeof b]) return sortConfig.direction === 'asc' ? -1 : 1;
             if (a[sortConfig.key as keyof typeof a] > b[sortConfig.key as keyof typeof b]) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [filteredStocks, sortConfig]);
+    }, [filteredStocks, sortConfig, totalPortfolioCost]);
 
     const requestSort = (key: keyof any) => {
         let direction: SortDirection = 'asc';
@@ -113,6 +122,7 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, 
               <th className="px-6 py-4 font-semibold text-right">市值</th>
               <SortableHeaderCell label="未實現損益" sortKey="unrealizedPnl" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
               <SortableHeaderCell label="報酬率" sortKey="unrealizedPnlPercent" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
+              <SortableHeaderCell label="投資占比" sortKey="investmentPercentage" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
               <th className="px-6 py-4 font-semibold text-center w-20">操作</th>
           </tr></thead>
           <tbody>{sortedStocks.map(stock => <StockRow key={stock.symbol} stock={stock} settings={settings} onEdit={onEdit} onDelete={onDelete} onBuy={onBuy} onSell={onSell} isSelected={selectedSymbols.has(stock.symbol)} toggleSelection={toggleSelection} isExpanded={expandedSymbols.has(stock.symbol)} onToggleExpand={toggleExpandSymbol} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</tbody>
@@ -137,7 +147,7 @@ const BuyTransactionDetailRow: React.FC<{ transaction: Transaction; settings: Se
             <td className="px-6 py-3 text-right">{transaction.shares.toLocaleString()}</td>
             <td className="px-6 py-3 text-right">{formatCurrency(transaction.price, settings.currency, 2)}</td>
             <td className="px-6 py-3 text-right">{formatCurrency(totalCost, settings.currency)}</td>
-            <td colSpan={4}></td>
+            <td colSpan={5}></td>
             <td className="px-6 py-4 text-center w-20" onClick={e => e.stopPropagation()}>
                 <ActionMenu onEdit={() => onEdit(stockSymbol, transaction.id)} onDelete={() => onDelete(stockSymbol, transaction.id)} />
             </td>
@@ -145,8 +155,8 @@ const BuyTransactionDetailRow: React.FC<{ transaction: Transaction; settings: Se
     );
 };
 
-const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials>, settings: Settings, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
-    const { currentShares, avgCost, totalCost, marketValue, unrealizedPnl, unrealizedPnlPercent } = stock;
+const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials> & { investmentPercentage: number }, settings: Settings, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
+    const { currentShares, avgCost, totalCost, marketValue, unrealizedPnl, unrealizedPnlPercent, investmentPercentage } = stock;
     const pnlColor = unrealizedPnl >= 0 ? 'text-success' : 'text-danger';
     const buyTransactions = useMemo(() => stock.transactions.filter(t => t.type === 'BUY').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [stock.transactions]);
 
@@ -171,6 +181,7 @@ const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinanci
                 <td className="px-6 py-4 text-right">{formatCurrency(marketValue, settings.currency)}</td>
                 <td className={`px-6 py-4 text-right font-semibold ${pnlColor}`}>{formatCurrency(unrealizedPnl, settings.currency)}</td>
                 <td className={`px-6 py-4 text-right font-semibold ${pnlColor}`}>{unrealizedPnlPercent.toFixed(2)}%</td>
+                <td className="px-6 py-4 text-right">{investmentPercentage.toFixed(2)}%</td>
                 <td className="px-6 py-4 text-center w-20" onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(stock)} onDelete={() => onDelete(stock)} onBuy={() => onBuy(stock)} onSell={() => onSell(stock)} /></td>
             </tr>
             {isExpanded && buyTransactions.map(tx => <BuyTransactionDetailRow key={tx.id} transaction={tx} settings={settings} stockSymbol={stock.symbol} onEdit={onEditTransaction} onDelete={onDeleteTransaction} isSelected={selectedTransactionIds.has(tx.id)} toggleSelection={toggleTransactionSelection} />)}
@@ -196,8 +207,8 @@ const BuyTransactionDetailCard: React.FC<{ transaction: Transaction; settings: S
     </div>
 );
 
-const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials>, settings: Settings, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
-    const { currentShares, avgCost, totalCost, marketValue, unrealizedPnl, unrealizedPnlPercent } = stock;
+const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials> & { investmentPercentage: number }, settings: Settings, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
+    const { currentShares, avgCost, totalCost, marketValue, unrealizedPnl, unrealizedPnlPercent, investmentPercentage } = stock;
     const pnlColor = unrealizedPnl >= 0 ? 'text-success' : 'text-danger';
     const buyTransactions = useMemo(() => stock.transactions.filter(t => t.type === 'BUY').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [stock.transactions]);
 
@@ -229,6 +240,7 @@ const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinanc
                 <div><span className="text-light-text/70 dark:text-dark-text/70">股數:</span> {currentShares.toLocaleString()}</div>
                 <div><span className="text-light-text/70 dark:text-dark-text/70">均價:</span> {formatCurrency(avgCost, settings.currency, 2)}</div>
                 <div><span className="text-light-text/70 dark:text-dark-text/70">現價:</span> {formatCurrency(stock.currentPrice, settings.currency, 2)}</div>
+                <div><span className="text-light-text/70 dark:text-dark-text/70">投資占比:</span> {investmentPercentage.toFixed(2)}%</div>
             </div>
         </div>
 
