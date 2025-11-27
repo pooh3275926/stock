@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Stock, HistoricalPrice } from '../types';
 import { ChevronDownIcon, ChevronUpIcon } from '../components/Icons';
@@ -144,7 +145,19 @@ export const HistoricalPricesPage: React.FC<{
   }, [allPrices, onSave]);
   
   const relevantStocks = useMemo(() => {
-      return stocks.filter(s => s.transactions.length > 0);
+      // Filter stocks that have transactions
+      const withHistory = stocks.filter(s => s.transactions.length > 0);
+      
+      // Sort: 1. Active (Held) first, 2. Symbol Ascending
+      return withHistory.sort((a, b) => {
+          const aHeld = calculateStockFinancials(a).currentShares > 0;
+          const bHeld = calculateStockFinancials(b).currentShares > 0;
+          
+          if (aHeld && !bHeld) return -1;
+          if (!aHeld && bHeld) return 1;
+          
+          return a.symbol.localeCompare(b.symbol, undefined, { numeric: true, sensitivity: 'base' });
+      });
   }, [stocks]);
 
   return (

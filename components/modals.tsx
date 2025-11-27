@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { CloseIcon } from './Icons';
 import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice, BudgetEntry } from '../types';
@@ -282,6 +283,11 @@ const UpdateAllPricesForm: React.FC<{
 }> = ({ stocks, onSave, onCancel }) => {
     const [prices, setPrices] = useState<{ [symbol: string]: string }>({});
 
+    // Sort stocks by symbol ascending for display
+    const sortedStocks = useMemo(() => {
+        return [...stocks].sort((a, b) => a.symbol.localeCompare(b.symbol, undefined, { numeric: true, sensitivity: 'base' }));
+    }, [stocks]);
+
     useEffect(() => {
         const initialPrices = stocks.reduce((acc, stock) => {
             acc[stock.symbol] = stock.currentPrice?.toString() || '';
@@ -336,7 +342,7 @@ const UpdateAllPricesForm: React.FC<{
                 輸入您目前持有股票的最新價格。儲存後，此價格將會更新個股的「現價」，並寫入至本月份的歷史價格紀錄中。
             </p>
             <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                {stocks.map(stock => (
+                {sortedStocks.map(stock => (
                     <div key={stock.symbol} className="grid grid-cols-[1fr_auto] items-center gap-4">
                         <label htmlFor={`price-${stock.symbol}`} className="font-medium text-light-text dark:text-dark-text truncate" title={`${stock.symbol} ${stock.name}`}>
                            {stock.symbol} <span className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</span>
