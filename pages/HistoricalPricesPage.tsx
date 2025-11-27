@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Stock, HistoricalPrice } from '../types';
 import { ChevronDownIcon, ChevronUpIcon } from '../components/Icons';
 import { calculateStockFinancials } from '../utils/calculations';
+import { StockTags } from '../components/common';
 
 // Helper to determine the months a stock was held
 const getMonthInputsForStock = (stock: Stock): string[] => {
@@ -60,7 +61,10 @@ const StockPriceEditor: React.FC<StockPriceEditorProps> = ({ stock, prices, onPr
                 aria-expanded={isExpanded}
                 aria-controls={`collapsible-content-${stock.symbol}`}
             >
-                <span>{stock.symbol} {stock.name}</span>
+                <div className="flex flex-col items-start">
+                    <span>{stock.symbol} {stock.name}</span>
+                    <StockTags symbol={stock.symbol} />
+                </div>
                 {isExpanded ? <ChevronUpIcon className="h-6 w-6"/> : <ChevronDownIcon className="h-6 w-6"/>}
             </button>
             {isExpanded && (

@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 // FIX: Added AreaChart to the import from recharts to resolve 'Cannot find name' errors.
-import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart, LineChart } from 'recharts';
+import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart, LineChart, PieChart, Pie } from 'recharts';
 import { Stock, Dividend, Transaction, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
@@ -260,6 +260,75 @@ export const ReturnTrendChart: React.FC<ReturnTrendChartProps> = ({ data, theme,
                     name={includeDividends ? "含息報酬率" : "未實現損益率"} 
                 />
             </LineChart>
+        </ResponsiveContainer>
+    );
+};
+
+// --- Distribution Pie Chart ---
+interface PieChartData {
+    name: string;
+    value: number;
+    [key: string]: any;
+}
+interface DistributionPieChartProps {
+    data: PieChartData[];
+    theme: 'light' | 'dark';
+}
+export const DistributionPieChart: React.FC<DistributionPieChartProps> = ({ data, theme }) => {
+    if (!data || data.length === 0) {
+         return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
+    }
+
+    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
+    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
+    const tooltipStyle = {
+        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
+        border: '1px solid',
+        borderColor: gridColor,
+        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
+        borderRadius: '0.5rem',
+    };
+
+    // Calculate percentages for custom label
+    const total = data.reduce((acc, cur) => acc + cur.value, 0);
+
+    return (
+        <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+                <Pie
+                    data={data}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+                        const RADIAN = Math.PI / 180;
+                        const radius = outerRadius * 1.2;
+                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                        
+                        // Simple check to avoid label overlap for very small slices, can be improved
+                        if (percent < 0.05) return null;
+
+                        return (
+                          <text x={x} y={y} fill={axisColor} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
+                            {`${name} ${(percent * 100).toFixed(1)}%`}
+                          </text>
+                        );
+                    }}
+                >
+                    {data.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                </Pie>
+                <Tooltip 
+                    contentStyle={tooltipStyle}
+                    itemStyle={{ color: theme === 'dark' ? '#D4C3A9' : '#6B6358' }}
+                    formatter={(value: number) => formatCurrency(value, 'TWD')}
+                />
+            </PieChart>
         </ResponsiveContainer>
     );
 };

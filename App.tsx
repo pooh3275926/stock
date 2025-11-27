@@ -702,7 +702,7 @@ const moreBottomNavItem = { id: 'MORE', icon: GridIcon, label: '更多' };
 const Sidebar: React.FC<{ setPage: (page: Page) => void; currentPage: Page, theme: 'light' | 'dark', toggleTheme: () => void; }> = ({ setPage, currentPage, theme, toggleTheme }) => {
     return (
         <nav className="hidden md:flex md:flex-col w-64 bg-light-card dark:bg-dark-card p-6 shadow-lg shrink-0">
-          <div className="text-primary text-2xl font-bold mb-10">Portfolio Pilot</div>
+          <div className="text-primary text-2xl font-bold mb-10">股票投資追蹤</div>
           <ul className="space-y-4 flex-grow">{allNavItems.map(item => (<li key={item.id}><button onClick={() => setPage(item.id as Page)} className={`w-full flex items-center p-4 rounded-lg transition-colors ${ currentPage === item.id ? 'bg-primary text-primary-foreground' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}><item.icon className="h-6 w-6" /> <span className="ml-4 font-medium">{item.label}</span></button></li>))}</ul>
           <div className="mt-4"><button onClick={toggleTheme} className="w-full flex items-center p-4 rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg"><span className="mr-4">{theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}</span> {theme === 'light' ? '夜間模式' : '日間模式'}</button></div>
         </nav>

@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Stock, Dividend, Settings } from '../types';
-import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig } from '../components/common';
+import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 import { stockDividendFrequency } from '../utils/data';
@@ -223,7 +224,11 @@ const GroupedDividendRow: React.FC<{ group: any; settings: Settings; onEdit: (d:
                         <button onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-1 rounded-full hover:bg-light-border dark:hover:bg-dark-border">{isOpen ? <ChevronUpIcon className="h-5 w-5" /> : <ChevronDownIcon className="h-5 w-5" />}</button>
                     </div>
                 </td>
-                <td className="px-6 py-4"><div className="font-bold">{group.stockSymbol}</div><div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div></td>
+                <td className="px-6 py-4">
+                    <div className="font-bold">{group.stockSymbol}</div>
+                    <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
+                    <StockTags symbol={group.stockSymbol} />
+                </td>
                 <td className="px-6 py-4 text-right">{group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</td>
                 <td className="px-6 py-4 text-right">{group.avgDividendPerShare.toFixed(4)}</td>
                 <td className="px-6 py-4 text-right">{formatCurrency(group.currentTotalCost, settings.currency)}</td>
@@ -249,6 +254,7 @@ const GroupedDividendCard: React.FC<{ group: any; settings: Settings; onEdit: (d
                     <div>
                         <div className="font-bold text-lg">{group.stockSymbol}</div>
                         <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
+                        <StockTags symbol={group.stockSymbol} />
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70 mt-2">參與股數: {group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</div>
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70">每股股利: {group.avgDividendPerShare.toFixed(4)}</div>
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70">持有總成本: {formatCurrency(group.currentTotalCost, settings.currency)}</div>

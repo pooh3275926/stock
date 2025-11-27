@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { EllipsisVerticalIcon, EditIcon, TrashIcon, PlusIcon, MinusIcon, SearchIcon, SortAscendingIcon, SortDescendingIcon, ArrowUpIcon, ChevronDownIcon } from './Icons';
+import { stockDefinitions } from '../utils/data';
 
 // --- Action Menu Component ---
 export const ActionMenu: React.FC<{ onEdit?: () => void; onDelete?: () => void; onBuy?: () => void; onSell?: () => void; }> = ({ onEdit, onDelete, onBuy, onSell }) => {
@@ -220,4 +221,23 @@ export const YearFilterDropdown: React.FC<{
       )}
     </div>
   );
+};
+
+export const StockTags: React.FC<{ symbol: string }> = ({ symbol }) => {
+    const metadata = stockDefinitions[symbol];
+    if (!metadata) return null;
+
+    return (
+        <div className="flex flex-wrap gap-1 mt-1">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary-foreground dark:text-primary">
+                {metadata.market}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                {metadata.type}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary/20 text-secondary dark:text-secondary-foreground">
+                {metadata.industry}
+            </span>
+        </div>
+    );
 };

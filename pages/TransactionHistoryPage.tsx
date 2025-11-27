@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { Stock, Settings } from '../types';
-import { ActionMenu, SearchInput, SortableHeaderCell, SortConfig, SelectionActionBar } from '../components/common';
+import { ActionMenu, SearchInput, SortableHeaderCell, SortConfig, SelectionActionBar, StockTags } from '../components/common';
 import { ChevronDownIcon, ChevronUpIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
@@ -131,7 +132,11 @@ const GroupedHistoricalStockRow: React.FC<{ stock: HistoricalStock; settings: Se
                     <button onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-1 rounded-full hover:bg-light-border dark:hover:bg-dark-border">{isOpen ? <ChevronUpIcon className="h-5 w-5" /> : <ChevronDownIcon className="h-5 w-5" />}</button>
                 </div>
             </td>
-            <td className="px-6 py-4"><div className="font-bold">{stock.symbol}</div><div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div></td>
+            <td className="px-6 py-4">
+                <div className="font-bold">{stock.symbol}</div>
+                <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
+                <StockTags symbol={stock.symbol} />
+            </td>
             <td className="px-6 py-4 text-right">{financials.totalSharesSold.toLocaleString()}</td>
             <td className="px-6 py-4 text-right">{formatCurrency(avgSellPrice, settings.currency, 2)}</td>
             <td className="px-6 py-4 text-right">{formatCurrency(totalNetSellIncome, settings.currency)}</td>
@@ -191,6 +196,7 @@ const GroupedHistoricalStockCard: React.FC<{ stock: HistoricalStock; settings: S
                      <div>
                         <div className="font-bold text-lg">{stock.symbol}</div>
                         <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
+                        <StockTags symbol={stock.symbol} />
                     </div>
                     <div className={`text-right font-semibold ${pnlColor}`}>
                         <div className="text-lg">{formatCurrency(financials.realizedPnl, settings.currency)}</div>

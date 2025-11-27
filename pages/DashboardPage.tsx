@@ -1,11 +1,11 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { KpiCard } from '../components/KpiCard';
-import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart, ReturnTrendChart } from '../components/PortfolioCharts';
+import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart, ReturnTrendChart, DistributionPieChart } from '../components/PortfolioCharts';
 import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice, getHistoricalPriceAsOf } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
-import { stockDividendFrequency } from '../utils/data';
+import { stockDividendFrequency, stockDefinitions } from '../utils/data';
 
 
 interface DashboardPageProps {
@@ -191,6 +191,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const topYield = [...contributionData].sort((a, b) => b.avgAnnualizedYield - a.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
     const bottomYield = [...contributionData].filter(d => d.avgAnnualizedYield > 0).sort((a, b) => a.avgAnnualizedYield - b.avgAnnualizedYield).slice(0, 3).map(d => ({ name: d.symbol, value: d.avgAnnualizedYield }));
 
+    // --- Distribution Calculations ---
+    const calculateDistribution = (groupBy: (def: any) => string, filter?: (def: any) => boolean) => {
+        const dist: { [key: string]: number } = {};
+        activeStocksForCharts.forEach(stock => {
+            const def = stockDefinitions[stock.symbol];
+            if (def && (!filter || filter(def))) {
+                const financials = calculateStockFinancials(stock);
+                const key = groupBy(def);
+                dist[key] = (dist[key] || 0) + financials.marketValue;
+            }
+        });
+        return Object.entries(dist)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    };
+
+    const marketDistribution = calculateDistribution(d => d.market);
+    const twTypeDistribution = calculateDistribution(d => d.type, d => d.market === '台股');
+    const usTypeDistribution = calculateDistribution(d => d.type, d => d.market === '美股');
+    const industryDistribution = calculateDistribution(d => d.industry);
+
     return {
       stats: { totalMarketValue, totalCost: totalCurrentCost, unrealizedPnl, totalRealizedPnl, totalDividends, totalReturn, totalReturnRate, dividendYield },
       dividendsForChart,
@@ -198,7 +219,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       topTotalReturn, bottomTotalReturn,
       topYield, bottomYield,
       avgYieldForCalc,
-      relevantStocksBase // Exposed for trend chart calculation
+      relevantStocksBase, // Exposed for trend chart calculation
+      marketDistribution,
+      twTypeDistribution,
+      usTypeDistribution,
+      industryDistribution
     };
   }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
 
@@ -594,6 +619,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                 labelEstimated="預估複利總值"
                 hideActual={true}
             />
+        </div>
+
+        {/* New Distribution Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md lg:col-span-3">
+                 <h2 className="text-xl font-semibold mb-4 text-center">市場分布圖 (持有中)</h2>
+                 <DistributionPieChart data={dashboardData.marketDistribution} theme={theme} />
+            </div>
+            <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+                 <h2 className="text-xl font-semibold mb-4 text-center">類型分布圖 - 台股 (持有中)</h2>
+                 <DistributionPieChart data={dashboardData.twTypeDistribution} theme={theme} />
+            </div>
+             <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+                 <h2 className="text-xl font-semibold mb-4 text-center">類型分布圖 - 美股 (持有中)</h2>
+                 <DistributionPieChart data={dashboardData.usTypeDistribution} theme={theme} />
+            </div>
+             <div className="bg-light-card dark:bg-dark-card p-4 sm:p-6 rounded-lg shadow-md">
+                 <h2 className="text-xl font-semibold mb-4 text-center">產業/指數分布圖 (持有中)</h2>
+                 <DistributionPieChart data={dashboardData.industryDistribution} theme={theme} />
+            </div>
         </div>
     </div>
   );

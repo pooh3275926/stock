@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Stock, Settings, Transaction } from '../types';
-import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig } from '../components/common';
+import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, RefreshIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
@@ -158,7 +159,11 @@ const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinanci
                         <button onClick={(e) => { e.stopPropagation(); onToggleExpand(stock.symbol); }} className="p-1 rounded-full hover:bg-light-border dark:hover:bg-dark-border">{isExpanded ? <ChevronUpIcon className="h-5 w-5" /> : <ChevronDownIcon className="h-5 w-5" />}</button>
                     </div>
                 </td>
-                <td className="px-6 py-4"><div className="font-bold">{stock.symbol}</div><div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div></td>
+                <td className="px-6 py-4">
+                    <div className="font-bold">{stock.symbol}</div>
+                    <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
+                    <StockTags symbol={stock.symbol} />
+                </td>
                 <td className="px-6 py-4 text-right">{currentShares.toLocaleString()}</td>
                 <td className="px-6 py-4 text-right">{formatCurrency(avgCost, settings.currency, 2)}</td>
                 <td className="px-6 py-4 text-right">{formatCurrency(totalCost, settings.currency)}</td>
@@ -202,7 +207,11 @@ const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinanc
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-start space-x-4">
                     <span onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary mt-1" checked={isSelected} onChange={() => toggleSelection(stock.symbol)} /></span>
-                    <div><div className="font-bold text-lg">{stock.symbol}</div><div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div></div>
+                    <div>
+                        <div className="font-bold text-lg">{stock.symbol}</div>
+                        <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
+                        <StockTags symbol={stock.symbol} />
+                    </div>
                 </div>
                 <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>
                     <ActionMenu onEdit={() => onEdit(stock)} onDelete={() => onDelete(stock)} onBuy={() => onBuy(stock)} onSell={() => onSell(stock)} />
