@@ -310,8 +310,8 @@ export const DistributionPieChart: React.FC<DistributionPieChartProps> = ({ data
                         const x = cx + radius * Math.cos(-midAngle * RADIAN);
                         const y = cy + radius * Math.sin(-midAngle * RADIAN);
                         
-                        // Simple check to avoid label overlap for very small slices, can be improved
-                        if (percent < 0.05) return null;
+                        // FIX: Removed the 5% threshold logic to ensure all labels are shown, even for small slices like '主動型'
+                        if (percent <= 0) return null;
 
                         return (
                           <text x={x} y={y} fill={axisColor} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
