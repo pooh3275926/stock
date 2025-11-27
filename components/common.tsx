@@ -83,6 +83,8 @@ export const ScrollToTopButton: React.FC<{ mainRef: React.RefObject<HTMLElement>
     );
 };
 
+const HELD_KEY = 'HELD';
+
 export const StockFilterDropdown: React.FC<{
   allSymbols: string[];
   selectedSymbols: string[];
@@ -120,25 +122,49 @@ export const StockFilterDropdown: React.FC<{
     const types = new Set<string>();
     allSymbols.forEach(s => {
         const def = stockDefinitions[s];
-        if (def && (!filterMarket || def.market === filterMarket)) {
+        
+        // Market Filter Logic
+        let marketMatch = true;
+        if (filterMarket === HELD_KEY) {
+            marketMatch = heldSymbols?.includes(s) || false;
+        } else if (filterMarket) {
+            marketMatch = def?.market === filterMarket;
+        }
+
+        if (def && marketMatch) {
             if (def.type) types.add(def.type);
         }
     });
     return Array.from(types).sort();
-  }, [allSymbols, filterMarket]);
+  }, [allSymbols, filterMarket, heldSymbols]);
 
   const availableIndustries = useMemo(() => {
     const industries = new Set<string>();
     allSymbols.forEach(s => {
         const def = stockDefinitions[s];
-        if (def && 
-            (!filterMarket || def.market === filterMarket) && 
-            (!filterType || def.type === filterType)) {
+        
+        // Market Filter Logic
+        let marketMatch = true;
+        if (filterMarket === HELD_KEY) {
+            marketMatch = heldSymbols?.includes(s) || false;
+        } else if (filterMarket) {
+            marketMatch = def?.market === filterMarket;
+        }
+
+        // Type Filter Logic
+        let typeMatch = true;
+        if (filterType === HELD_KEY) {
+            typeMatch = heldSymbols?.includes(s) || false;
+        } else if (filterType) {
+            typeMatch = def?.type === filterType;
+        }
+
+        if (def && marketMatch && typeMatch) {
             if (def.industry) industries.add(def.industry);
         }
     });
     return Array.from(industries).sort();
-  }, [allSymbols, filterMarket, filterType]);
+  }, [allSymbols, filterMarket, filterType, heldSymbols]);
 
   // Handle Dropdown Filter Changes (Reset children filters)
   const handleMarketChange = (val: string) => {
@@ -157,9 +183,28 @@ export const StockFilterDropdown: React.FC<{
     // 1. Filter
     let filtered = allSymbols.filter(s => {
         const def = stockDefinitions[s];
-        if (filterMarket && def?.market !== filterMarket) return false;
-        if (filterType && def?.type !== filterType) return false;
-        if (filterIndustry && def?.industry !== filterIndustry) return false;
+        
+        // Market
+        if (filterMarket === HELD_KEY) {
+             if (!heldSymbols?.includes(s)) return false;
+        } else if (filterMarket && def?.market !== filterMarket) {
+             return false;
+        }
+
+        // Type
+        if (filterType === HELD_KEY) {
+             if (!heldSymbols?.includes(s)) return false;
+        } else if (filterType && def?.type !== filterType) {
+             return false;
+        }
+
+        // Industry
+        if (filterIndustry === HELD_KEY) {
+             if (!heldSymbols?.includes(s)) return false;
+        } else if (filterIndustry && def?.industry !== filterIndustry) {
+             return false;
+        }
+        
         return true;
     });
 
@@ -225,6 +270,7 @@ export const StockFilterDropdown: React.FC<{
                 className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card"
              >
                  <option value="">所有市場</option>
+                 <option value={HELD_KEY}>持有中</option>
                  {availableMarkets.map(m => <option key={m} value={m}>{m}</option>)}
              </select>
 
@@ -234,6 +280,7 @@ export const StockFilterDropdown: React.FC<{
                 className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card"
              >
                  <option value="">所有類型</option>
+                 <option value={HELD_KEY}>持有中</option>
                  {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
              </select>
 
@@ -243,6 +290,7 @@ export const StockFilterDropdown: React.FC<{
                 className="w-full p-2 text-sm rounded border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card"
              >
                  <option value="">所有產業/指數</option>
+                 <option value={HELD_KEY}>持有中</option>
                  {availableIndustries.map(i => <option key={i} value={i}>{i}</option>)}
              </select>
           </div>
