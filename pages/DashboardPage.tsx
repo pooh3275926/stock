@@ -1,12 +1,10 @@
 
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { ProfitLossBarChart, AdvancedMonthlyDividendChart, YieldContributionChart, CompoundInterestChart, ReturnTrendChart, DistributionPieChart } from '../components/PortfolioCharts';
-import { Stock, Dividend, Settings, HistoricalPrice } from '../types';
+import { Stock, Dividend, Settings, HistoricalPrice, StockMetadataMap } from '../types';
 import { calculateStockFinancials, formatCurrency, getLatestHistoricalPrice, getHistoricalPriceAsOf } from '../utils/calculations';
 import { StockFilterDropdown, YearFilterDropdown } from '../components/common';
-import { stockDividendFrequency, stockDefinitions } from '../utils/data';
 
 
 interface DashboardPageProps {
@@ -21,9 +19,10 @@ interface DashboardPageProps {
   selectedYear: number | 'all';
   onYearChange: (year: number | 'all') => void;
   historicalPrices: HistoricalPrice[];
+  stockMetadata: StockMetadataMap;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends, settings, theme, allStockSymbols, filteredSymbols, onFilterChange, availableYears, selectedYear, onYearChange, historicalPrices, stockMetadata }) => {
 
   const [projectionYears, setProjectionYears] = useState<number>(30);
   const [expectedDivRate, setExpectedDivRate] = useState<number>(5);
@@ -168,7 +167,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
             const proportionalCost = sharesHeld * financials.avgCost;
             if (proportionalCost === 0) return 0;
             const individualYieldRate = (d.amount / proportionalCost) * 100;
-            const frequency = stockDividendFrequency[stock.symbol] || 1;
+            // FIX: Replaced missing stockDividendFrequency import with stockMetadata lookups.
+            const frequency = stockMetadata[stock.symbol]?.frequency || 1;
             return individualYieldRate * frequency;
         });
         const avgAnnualizedYield = annualizedYields.length > 0
@@ -196,7 +196,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
     const calculateDistribution = (groupBy: (def: any) => string, filter?: (def: any) => boolean) => {
         const dist: { [key: string]: number } = {};
         activeStocksForCharts.forEach(stock => {
-            const def = stockDefinitions[stock.symbol];
+            // FIX: Replaced missing stockDefinitions import with stockMetadata.
+            const def = stockMetadata[stock.symbol];
             if (def && (!filter || filter(def))) {
                 const financials = calculateStockFinancials(stock);
                 const key = groupBy(def);
@@ -226,7 +227,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
       usTypeDistribution,
       industryDistribution
     };
-  }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices]);
+  }, [stocks, dividends, filteredSymbols, selectedYear, historicalPrices, stockMetadata]);
 
   // Update default rates once based on calculation
   useEffect(() => {
@@ -490,6 +491,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ stocks, dividends,
                 allSymbols={allStockSymbols}
                 selectedSymbols={filteredSymbols}
                 onChange={onFilterChange}
+                stockMetadata={stockMetadata}
                 heldSymbols={heldSymbols}
             />
         </div>

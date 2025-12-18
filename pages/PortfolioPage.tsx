@@ -1,7 +1,6 @@
 
-
 import React, { useState, useMemo, useCallback } from 'react';
-import type { Stock, Settings, Transaction } from '../types';
+import type { Stock, Settings, Transaction, StockMetadataMap } from '../types';
 import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, RefreshIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
@@ -9,6 +8,7 @@ import { calculateStockFinancials, formatCurrency } from '../utils/calculations'
 interface PortfolioPageProps {
     stocks: Stock[];
     settings: Settings;
+    stockMetadata: StockMetadataMap;
     onAdd: () => void;
     onEdit: (s: Stock) => void;
     onDelete: (s: Stock) => void;
@@ -28,7 +28,7 @@ interface PortfolioPageProps {
 }
 type SortDirection = 'asc' | 'desc';
 
-export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, onAdd, onEdit, onDelete, onBuy, onSell, selectedSymbols, toggleSelection, clearSelection, deleteSelected, selectedTransactionIds, toggleTransactionSelection, clearTransactionSelection, deleteSelectedTransactions, onEditTransaction, onDeleteTransaction, onAutoUpdate }) => {
+export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, stockMetadata, onAdd, onEdit, onDelete, onBuy, onSell, selectedSymbols, toggleSelection, clearSelection, deleteSelected, selectedTransactionIds, toggleTransactionSelection, clearTransactionSelection, deleteSelectedTransactions, onEditTransaction, onDeleteTransaction, onAutoUpdate }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'symbol', direction: 'asc' });
     const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(new Set());
@@ -108,7 +108,7 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, 
       {selectedSymbols.size > 0 && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedSymbols.size} onCancel={clearSelection} onDelete={deleteSelected} /></div>}
       {selectedTransactionIds.size > 0 && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedTransactionIds.size} onCancel={clearTransactionSelection} onDelete={deleteSelectedTransactions} itemName="筆交易" /></div>}
       
-      <div className="md:hidden space-y-4">{sortedStocks.map(stock => <StockCard key={stock.symbol} stock={stock} settings={settings} onEdit={onEdit} onDelete={onDelete} onBuy={onBuy} onSell={onSell} isSelected={selectedSymbols.has(stock.symbol)} toggleSelection={toggleSelection} isExpanded={expandedSymbols.has(stock.symbol)} onToggleExpand={toggleExpandSymbol} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</div>
+      <div className="md:hidden space-y-4">{sortedStocks.map(stock => <StockCard key={stock.symbol} stock={stock} settings={settings} stockMetadata={stockMetadata} onEdit={onEdit} onDelete={onDelete} onBuy={onBuy} onSell={onSell} isSelected={selectedSymbols.has(stock.symbol)} toggleSelection={toggleSelection} isExpanded={expandedSymbols.has(stock.symbol)} onToggleExpand={toggleExpandSymbol} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</div>
       
       <div className="hidden md:block bg-light-card dark:bg-dark-card rounded-lg shadow-md">
         <table className="w-full text-left">
@@ -125,7 +125,7 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({ stocks, settings, 
               <SortableHeaderCell label="投資占比" sortKey="investmentPercentage" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
               <th className="px-6 py-4 font-semibold text-center w-20">操作</th>
           </tr></thead>
-          <tbody>{sortedStocks.map(stock => <StockRow key={stock.symbol} stock={stock} settings={settings} onEdit={onEdit} onDelete={onDelete} onBuy={onBuy} onSell={onSell} isSelected={selectedSymbols.has(stock.symbol)} toggleSelection={toggleSelection} isExpanded={expandedSymbols.has(stock.symbol)} onToggleExpand={toggleExpandSymbol} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</tbody>
+          <tbody>{sortedStocks.map(stock => <StockRow key={stock.symbol} stock={stock} settings={settings} stockMetadata={stockMetadata} onEdit={onEdit} onDelete={onDelete} onBuy={onBuy} onSell={onSell} isSelected={selectedSymbols.has(stock.symbol)} toggleSelection={toggleSelection} isExpanded={expandedSymbols.has(stock.symbol)} onToggleExpand={toggleExpandSymbol} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</tbody>
         </table>
       </div>
     </div>
@@ -155,7 +155,7 @@ const BuyTransactionDetailRow: React.FC<{ transaction: Transaction; settings: Se
     );
 };
 
-const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials> & { investmentPercentage: number }, settings: Settings, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
+const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials> & { investmentPercentage: number }, settings: Settings, stockMetadata: StockMetadataMap, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, stockMetadata, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
     const { currentShares, avgCost, totalCost, marketValue, unrealizedPnl, unrealizedPnlPercent, investmentPercentage } = stock;
     const pnlColor = unrealizedPnl >= 0 ? 'text-success' : 'text-danger';
     const buyTransactions = useMemo(() => stock.transactions.filter(t => t.type === 'BUY').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [stock.transactions]);
@@ -172,7 +172,7 @@ const StockRow: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinanci
                 <td className="px-6 py-4">
                     <div className="font-bold">{stock.symbol}</div>
                     <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
-                    <StockTags symbol={stock.symbol} />
+                    <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
                 </td>
                 <td className="px-6 py-4 text-right">{currentShares.toLocaleString()}</td>
                 <td className="px-6 py-4 text-right">{formatCurrency(avgCost, settings.currency, 2)}</td>
@@ -207,7 +207,7 @@ const BuyTransactionDetailCard: React.FC<{ transaction: Transaction; settings: S
     </div>
 );
 
-const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials> & { investmentPercentage: number }, settings: Settings, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
+const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinancials> & { investmentPercentage: number }, settings: Settings, stockMetadata: StockMetadataMap, onEdit: (s: Stock) => void; onDelete: (s: Stock) => void; onBuy: (s: Stock) => void; onSell: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; isExpanded: boolean; onToggleExpand: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, stockMetadata, onEdit, onDelete, onBuy, onSell, isSelected, toggleSelection, isExpanded, onToggleExpand, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
     const { currentShares, avgCost, totalCost, marketValue, unrealizedPnl, unrealizedPnlPercent, investmentPercentage } = stock;
     const pnlColor = unrealizedPnl >= 0 ? 'text-success' : 'text-danger';
     const buyTransactions = useMemo(() => stock.transactions.filter(t => t.type === 'BUY').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [stock.transactions]);
@@ -221,7 +221,7 @@ const StockCard: React.FC<{stock: Stock & ReturnType<typeof calculateStockFinanc
                     <div>
                         <div className="font-bold text-lg">{stock.symbol}</div>
                         <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
-                        <StockTags symbol={stock.symbol} />
+                        <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
                     </div>
                 </div>
                 <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Stock, HistoricalPrice } from '../types';
+import type { Stock, HistoricalPrice, StockMetadataMap } from '../types';
 import { ChevronDownIcon, ChevronUpIcon } from '../components/Icons';
 import { calculateStockFinancials } from '../utils/calculations';
 import { StockTags } from '../components/common';
@@ -42,10 +42,11 @@ const getMonthInputsForStock = (stock: Stock): string[] => {
 interface StockPriceEditorProps {
     stock: Stock;
     prices: { [key: string]: string };
+    stockMetadata: StockMetadataMap;
     onPriceChange: (yearMonth: string, value: string) => void;
 }
 
-const StockPriceEditor: React.FC<StockPriceEditorProps> = ({ stock, prices, onPriceChange }) => {
+const StockPriceEditor: React.FC<StockPriceEditorProps> = ({ stock, prices, stockMetadata, onPriceChange }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const monthInputs = useMemo(() => getMonthInputsForStock(stock), [stock]);
     
@@ -63,7 +64,7 @@ const StockPriceEditor: React.FC<StockPriceEditorProps> = ({ stock, prices, onPr
             >
                 <div className="flex flex-col items-start">
                     <span>{stock.symbol} {stock.name}</span>
-                    <StockTags symbol={stock.symbol} />
+                    <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
                 </div>
                 {isExpanded ? <ChevronUpIcon className="h-6 w-6"/> : <ChevronDownIcon className="h-6 w-6"/>}
             </button>
@@ -96,9 +97,10 @@ const StockPriceEditor: React.FC<StockPriceEditorProps> = ({ stock, prices, onPr
 export const HistoricalPricesPage: React.FC<{
   stocks: Stock[];
   historicalPrices: HistoricalPrice[];
+  stockMetadata: StockMetadataMap;
   onSave: React.Dispatch<React.SetStateAction<HistoricalPrice[]>>;
   onOpenUpdateAllPricesModal: () => void;
-}> = ({ stocks, historicalPrices, onSave, onOpenUpdateAllPricesModal }) => {
+}> = ({ stocks, historicalPrices, stockMetadata, onSave, onOpenUpdateAllPricesModal }) => {
   
   const [allPrices, setAllPrices] = useState<{ [symbol: string]: { [yearMonth: string]: string } }>({});
 
@@ -179,6 +181,7 @@ export const HistoricalPricesPage: React.FC<{
                         key={stock.symbol}
                         stock={stock}
                         prices={allPrices[stock.symbol] || {}}
+                        stockMetadata={stockMetadata}
                         onPriceChange={(yearMonth, value) => handlePriceChange(stock.symbol, yearMonth, value)}
                     />
                 ))

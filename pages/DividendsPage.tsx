@@ -1,15 +1,15 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import type { Stock, Dividend, Settings } from '../types';
+import type { Stock, Dividend, Settings, StockMetadataMap } from '../types';
 import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
-import { stockDividendFrequency } from '../utils/data';
 
 interface DividendsPageProps { 
     stocks: Stock[];
     dividends: Dividend[];
     settings: Settings;
+    stockMetadata: StockMetadataMap;
     onAdd: () => void;
     onEdit: (d: Dividend) => void;
     onDelete: (d: Dividend) => void;
@@ -25,7 +25,7 @@ interface DividendsPageProps {
 
 type SortDirection = 'asc' | 'desc';
 
-export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends, settings, onAdd, onEdit, onDelete, selectedGroups, toggleGroupSelection, clearGroupSelection, deleteSelectedGroups, selectedIds, toggleIdSelection, clearIdSelection, deleteSelectedIds }) => {
+export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends, settings, stockMetadata, onAdd, onEdit, onDelete, selectedGroups, toggleGroupSelection, clearGroupSelection, deleteSelectedGroups, selectedIds, toggleIdSelection, clearIdSelection, deleteSelectedIds }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'stockSymbol', direction: 'asc' });
     const [showOnlyHeld, setShowOnlyHeld] = useState(false);
@@ -56,7 +56,8 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
                 const sharesHeld = d.sharesHeld || 0;
                 const proportionalCost = sharesHeld * financials.avgCost;
                 const individualYieldRate = proportionalCost > 0 ? (d.amount / proportionalCost) * 100 : 0;
-                const frequency = stockDividendFrequency[symbol] || 1;
+                // FIX: Replaced missing stockDividendFrequency import with stockMetadata lookups.
+                const frequency = stockMetadata[symbol]?.frequency || 1;
                 const annualizedYield = individualYieldRate * frequency;
                 return { ...d, yieldRate: individualYieldRate, annualizedYield };
             });
@@ -83,7 +84,7 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
         }
         return result;
 
-    }, [dividends, stocks, searchTerm, showOnlyHeld]);
+    }, [dividends, stocks, searchTerm, showOnlyHeld, stockMetadata]);
 
     const sortedGroups = useMemo(() => {
         return [...groupedDividends].sort((a, b) => {
@@ -158,6 +159,7 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
                                 key={group.stockSymbol} 
                                 group={group} 
                                 settings={settings} 
+                                stockMetadata={stockMetadata}
                                 onEdit={onEdit} 
                                 onDelete={onDelete} 
                                 isSelected={selectedGroups.has(group.stockSymbol)} 
@@ -175,6 +177,7 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
                         key={group.stockSymbol}
                         group={group}
                         settings={settings}
+                        stockMetadata={stockMetadata}
                         onEdit={onEdit}
                         onDelete={onDelete}
                         isSelected={selectedGroups.has(group.stockSymbol)} 
@@ -213,7 +216,7 @@ const DividendRow: React.FC<{dividend: any; avgCost: number; settings: Settings;
     );
 };
 
-const GroupedDividendRow: React.FC<{ group: any; settings: Settings; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedIds: Set<string>; toggleIdSelection: (id: string) => void; }> = ({ group, settings, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
+const GroupedDividendRow: React.FC<{ group: any; settings: Settings; stockMetadata: StockMetadataMap; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedIds: Set<string>; toggleIdSelection: (id: string) => void; }> = ({ group, settings, stockMetadata, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
     const [isOpen, setIsOpen] = useState(false);
     return (
         <>
@@ -227,7 +230,7 @@ const GroupedDividendRow: React.FC<{ group: any; settings: Settings; onEdit: (d:
                 <td className="px-6 py-4">
                     <div className="font-bold">{group.stockSymbol}</div>
                     <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
-                    <StockTags symbol={group.stockSymbol} />
+                    <StockTags symbol={group.stockSymbol} stockMetadata={stockMetadata} />
                 </td>
                 <td className="px-6 py-4 text-right">{group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</td>
                 <td className="px-6 py-4 text-right">{group.avgDividendPerShare.toFixed(4)}</td>
@@ -244,7 +247,7 @@ const GroupedDividendRow: React.FC<{ group: any; settings: Settings; onEdit: (d:
     );
 };
 
-const GroupedDividendCard: React.FC<{ group: any; settings: Settings; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedIds: Set<string>; toggleIdSelection: (id: string) => void; }> = ({ group, settings, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
+const GroupedDividendCard: React.FC<{ group: any; settings: Settings; stockMetadata: StockMetadataMap; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedIds: Set<string>; toggleIdSelection: (id: string) => void; }> = ({ group, settings, stockMetadata, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
     const [isOpen, setIsOpen] = useState(false);
     return (
         <div className={`bg-light-card dark:bg-dark-card rounded-lg shadow-md selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20 ring-2 ring-primary' : ''}`}>
@@ -254,7 +257,7 @@ const GroupedDividendCard: React.FC<{ group: any; settings: Settings; onEdit: (d
                     <div>
                         <div className="font-bold text-lg">{group.stockSymbol}</div>
                         <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
-                        <StockTags symbol={group.stockSymbol} />
+                        <StockTags symbol={group.stockSymbol} stockMetadata={stockMetadata} />
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70 mt-2">參與股數: {group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</div>
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70">每股股利: {group.avgDividendPerShare.toFixed(4)}</div>
                         <div className="text-xs text-light-text/70 dark:text-dark-text/70">持有總成本: {formatCurrency(group.currentTotalCost, settings.currency)}</div>

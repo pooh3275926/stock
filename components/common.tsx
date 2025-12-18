@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EllipsisVerticalIcon, EditIcon, TrashIcon, PlusIcon, MinusIcon, SearchIcon, SortAscendingIcon, SortDescendingIcon, ArrowUpIcon, ChevronDownIcon } from './Icons';
-import { stockDefinitions } from '../utils/data';
+import { StockMetadataMap } from '../types';
 
 // --- Action Menu Component ---
 export const ActionMenu: React.FC<{ onEdit?: () => void; onDelete?: () => void; onBuy?: () => void; onSell?: () => void; }> = ({ onEdit, onDelete, onBuy, onSell }) => {
@@ -85,12 +85,14 @@ export const ScrollToTopButton: React.FC<{ mainRef: React.RefObject<HTMLElement>
 
 const HELD_KEY = 'HELD';
 
+// FIX: Added stockMetadata as a required prop to replace the missing stockDefinitions import.
 export const StockFilterDropdown: React.FC<{
   allSymbols: string[];
   selectedSymbols: string[];
   onChange: (selected: string[]) => void;
+  stockMetadata: StockMetadataMap;
   heldSymbols?: string[];
-}> = ({ allSymbols, selectedSymbols, onChange, heldSymbols }) => {
+}> = ({ allSymbols, selectedSymbols, onChange, stockMetadata, heldSymbols }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -109,19 +111,19 @@ export const StockFilterDropdown: React.FC<{
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
-  // Derived Filter Options based on allSymbols + stockDefinitions
+  // Derived Filter Options based on allSymbols + stockMetadata
   const availableMarkets = useMemo(() => {
     const markets = new Set<string>();
     allSymbols.forEach(s => {
-        if (stockDefinitions[s]?.market) markets.add(stockDefinitions[s].market);
+        if (stockMetadata[s]?.market) markets.add(stockMetadata[s].market);
     });
     return Array.from(markets).sort();
-  }, [allSymbols]);
+  }, [allSymbols, stockMetadata]);
 
   const availableTypes = useMemo(() => {
     const types = new Set<string>();
     allSymbols.forEach(s => {
-        const def = stockDefinitions[s];
+        const def = stockMetadata[s];
         
         // Market Filter Logic
         let marketMatch = true;
@@ -136,12 +138,12 @@ export const StockFilterDropdown: React.FC<{
         }
     });
     return Array.from(types).sort();
-  }, [allSymbols, filterMarket, heldSymbols]);
+  }, [allSymbols, filterMarket, heldSymbols, stockMetadata]);
 
   const availableIndustries = useMemo(() => {
     const industries = new Set<string>();
     allSymbols.forEach(s => {
-        const def = stockDefinitions[s];
+        const def = stockMetadata[s];
         
         // Market Filter Logic
         let marketMatch = true;
@@ -164,7 +166,7 @@ export const StockFilterDropdown: React.FC<{
         }
     });
     return Array.from(industries).sort();
-  }, [allSymbols, filterMarket, filterType, heldSymbols]);
+  }, [allSymbols, filterMarket, filterType, heldSymbols, stockMetadata]);
 
   // Handle Dropdown Filter Changes (Reset children filters)
   const handleMarketChange = (val: string) => {
@@ -182,7 +184,7 @@ export const StockFilterDropdown: React.FC<{
   const displayedSymbols = useMemo(() => {
     // 1. Filter
     let filtered = allSymbols.filter(s => {
-        const def = stockDefinitions[s];
+        const def = stockMetadata[s];
         
         // Market
         if (filterMarket === HELD_KEY) {
@@ -220,7 +222,7 @@ export const StockFilterDropdown: React.FC<{
         // Then by Symbol (Numeric aware for 0050 vs 2330 etc)
         return a.localeCompare(b, undefined, { numeric: true });
     });
-  }, [allSymbols, filterMarket, filterType, filterIndustry, heldSymbols]);
+  }, [allSymbols, filterMarket, filterType, filterIndustry, heldSymbols, stockMetadata]);
 
   const isAllDisplayedSelected = displayedSymbols.length > 0 && displayedSymbols.every(s => selectedSymbols.includes(s));
 
@@ -315,7 +317,7 @@ export const StockFilterDropdown: React.FC<{
             ) : (
                 displayedSymbols.map(symbol => {
                     const isHeld = heldSymbols?.includes(symbol);
-                    const def = stockDefinitions[symbol];
+                    const def = stockMetadata[symbol];
                     return (
                         <label key={symbol} className="flex items-center space-x-3 p-2 rounded-md hover:bg-light-bg dark:hover:bg-dark-bg cursor-pointer">
                             <input 
@@ -393,8 +395,9 @@ export const YearFilterDropdown: React.FC<{
   );
 };
 
-export const StockTags: React.FC<{ symbol: string }> = ({ symbol }) => {
-    const metadata = stockDefinitions[symbol];
+// FIX: Added stockMetadata as a required prop and removed usage of missing stockDefinitions.
+export const StockTags: React.FC<{ symbol: string; stockMetadata: StockMetadataMap }> = ({ symbol, stockMetadata }) => {
+    const metadata = stockMetadata[symbol];
     if (!metadata) return null;
 
     return (

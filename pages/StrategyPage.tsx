@@ -1,10 +1,9 @@
 
 import React, { useMemo, useState } from 'react';
-import type { Stock, Dividend, Settings, Strategy, Transaction } from '../types';
+import type { Stock, Dividend, Settings, Strategy, Transaction, StockMetadataMap } from '../types';
 import { CompoundInterestChart } from '../components/PortfolioCharts';
-import { StrategyIcon, ArrowUpIcon, HistoryIcon, TrashIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, EditIcon, CloseIcon } from '../components/Icons';
+import { StrategyIcon, HistoryIcon, TrashIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, EditIcon, CloseIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
-import { stockDefinitions, stockDividendCalendar, stockDividendFrequency, stockDefaultYields } from '../utils/data';
 
 interface StrategyPageProps {
   strategies: Strategy[];
@@ -12,6 +11,8 @@ interface StrategyPageProps {
   dividends: Dividend[];
   settings: Settings;
   theme: 'light' | 'dark';
+  // Add missing stockMetadata prop
+  stockMetadata: StockMetadataMap;
   onAdd: () => void;
   onEdit: (s: Strategy) => void;
   onDelete: (id: string) => void;
@@ -19,12 +20,12 @@ interface StrategyPageProps {
   onReorder: (strategies: Strategy[]) => void;
 }
 
-export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, dividends, settings, theme, onAdd, onEdit, onSave, onDelete, onReorder }) => {
+export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, dividends, settings, theme, stockMetadata, onAdd, onEdit, onSave, onDelete, onReorder }) => {
   
   const labStocks = useMemo(() => {
     const autoTargetStocks = stocks.filter(s => {
-      // 預設抓取高股息，但排序後不限制標籤
-      const isHighDividend = stockDefinitions[s.symbol]?.type === '高股息';
+      // FIX: Use stockMetadata instead of missing stockDefinitions export
+      const isHighDividend = stockMetadata[s.symbol]?.type === '高股息';
       return calculateStockFinancials(s).currentShares > 0 && isHighDividend;
     });
 
@@ -51,7 +52,8 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
       const financials = calculateStockFinancials(stock);
       const stockDivs = dividends.filter(d => d.stockSymbol === symbol);
       const latestYield = financials.totalCost > 0 ? (stockDivs.reduce((sum, d) => sum + d.amount, 0) / financials.totalCost) * 100 : 5;
-      const defaultYield = stockDefaultYields[symbol] || Math.max(5, latestYield);
+      // FIX: Use stockMetadata and default logic instead of missing stockDefaultYields export
+      const defaultYield = Math.max(5, latestYield);
 
       return {
         id: `auto-${symbol}`,
@@ -65,7 +67,7 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
         expectedDividendYield: defaultYield,
       } as Strategy;
     });
-  }, [stocks, strategies, dividends]);
+  }, [stocks, strategies, dividends, stockMetadata]);
 
   const handleMove = (index: number, direction: 'up' | 'down') => {
     const newIdx = direction === 'up' ? index - 1 : index + 1;
@@ -104,6 +106,7 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
             settings={settings} 
             theme={theme}
             allDividends={dividends}
+            stockMetadata={stockMetadata}
             stockData={stocks.find(s => s.symbol === strategy.targetSymbol)}
             onUpdate={(data) => onSave(data, strategy.id.startsWith('auto-') ? undefined : strategy.id)}
             onDelete={() => onDelete(strategy.id)}
@@ -123,6 +126,7 @@ const StrategyEngineCard: React.FC<{
     settings: Settings; 
     theme: 'light' | 'dark';
     allDividends: Dividend[];
+    stockMetadata: StockMetadataMap;
     stockData?: Stock;
     onUpdate: (data: Omit<Strategy, 'id'>) => void;
     onDelete: () => void;
@@ -130,7 +134,7 @@ const StrategyEngineCard: React.FC<{
     onMoveDown: () => void;
     isFirst: boolean;
     isLast: boolean;
-}> = ({ strategy, settings, theme, onUpdate, allDividends, stockData, onDelete, onMoveUp, onMoveDown, isFirst, isLast }) => {
+}> = ({ strategy, settings, theme, onUpdate, allDividends, stockMetadata, stockData, onDelete, onMoveUp, onMoveDown, isFirst, isLast }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [historyYear, setHistoryYear] = useState<number>(new Date().getFullYear());
     const [isEditMode, setIsEditMode] = useState(false);
@@ -231,8 +235,9 @@ const StrategyEngineCard: React.FC<{
     const sim = useMemo(() => {
         const years = 20;
         const chartData = [];
-        const calendar = stockDividendCalendar[strategy.targetSymbol];
-        const freq = stockDividendFrequency[strategy.targetSymbol] || 4;
+        // FIX: Use stockMetadata instead of missing stockDividendCalendar export
+        const meta = stockMetadata[strategy.targetSymbol];
+        const freq = meta?.frequency || 4;
         let balance = strategy.initialAmount;
         let totalInvested = strategy.initialAmount;
         const monthlyGrowth = Math.pow(1 + strategy.expectedAnnualReturn / 100, 1 / 12) - 1;
@@ -243,11 +248,11 @@ const StrategyEngineCard: React.FC<{
                 balance += strategy.monthlyAmount;
                 totalInvested += strategy.monthlyAmount;
                 balance *= (1 + monthlyGrowth);
-                if (calendar?.exDivMonths.includes(m)) {
+                if (meta?.exDivMonths.includes(m)) {
                     balance += strategy.exDivExtraAmount;
                     totalInvested += strategy.exDivExtraAmount;
                 }
-                if (calendar?.payMonths.includes(m)) {
+                if (meta?.exDivMonths.includes(m)) {
                     const div = balance * divRatePerFreq;
                     if (strategy.reinvest) balance += div;
                 }
@@ -259,9 +264,10 @@ const StrategyEngineCard: React.FC<{
             });
         }
         return { chartData, final: balance };
-    }, [strategy]);
+    }, [strategy, stockMetadata]);
 
-    const metadata = stockDefinitions[strategy.targetSymbol];
+    // FIX: Use stockMetadata instead of missing stockDefinitions export
+    const metadata = stockMetadata[strategy.targetSymbol];
 
     return (
         <div className={`bg-light-card dark:bg-dark-card rounded-[3rem] shadow-2xl border border-light-border dark:border-dark-border overflow-hidden transition-all duration-500 ${isExpanded ? 'ring-4 ring-primary/20' : ''}`}>
@@ -376,17 +382,9 @@ const StrategyEngineCard: React.FC<{
 
                 {/* 實戰績效統計 */}
                 <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-8 p-8 bg-success/10 dark:bg-success/5 rounded-[3rem] border-2 border-success/30">
-                    <div className="col-span-2 md:col-span-1">
+                    <div>
                         <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度實際領息</p>
                         <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.totalDiv, settings.currency)}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度額外加碼</p>
-                        <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.extraCapital, settings.currency)}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度報酬率</p>
-                        <p className="text-2xl font-black text-success">{actualYearStats.annualReturn.toFixed(2)}%</p>
                     </div>
                     <div>
                         <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">累計領息</p>

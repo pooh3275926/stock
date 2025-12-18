@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import type { Stock, Dividend, Settings } from '../types';
+import type { Stock, Dividend, Settings, StockMetadataMap } from '../types';
 import { SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
@@ -8,11 +8,12 @@ interface TotalReturnPageProps {
   stocks: Stock[]; // Should pass active stocks
   dividends: Dividend[];
   settings: Settings;
+  stockMetadata: StockMetadataMap;
 }
 
 type SortDirection = 'asc' | 'desc';
 
-export const TotalReturnPage: React.FC<TotalReturnPageProps> = ({ stocks, dividends, settings }) => {
+export const TotalReturnPage: React.FC<TotalReturnPageProps> = ({ stocks, dividends, settings, stockMetadata }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'symbol', direction: 'asc' });
 
@@ -99,7 +100,7 @@ export const TotalReturnPage: React.FC<TotalReturnPageProps> = ({ stocks, divide
                         <td className="px-6 py-4">
                             <div className="font-bold">{stock.symbol}</div>
                             <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
-                            <StockTags symbol={stock.symbol} />
+                            <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
                         </td>
                         <td className="px-6 py-4 text-right">{stock.currentShares.toLocaleString()}</td>
                         <td className="px-6 py-4 text-right">{formatCurrency(stock.avgCost, settings.currency, 2)}</td>
@@ -128,7 +129,7 @@ export const TotalReturnPage: React.FC<TotalReturnPageProps> = ({ stocks, divide
                         <div>
                             <div className="font-bold text-lg">{stock.symbol}</div>
                             <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
-                            <StockTags symbol={stock.symbol} />
+                            <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
                         </div>
                         <div className={`text-right font-semibold ${pnlColor}`}>
                             <div className="text-xl">{formatCurrency(stock.totalPnL, settings.currency)}</div>

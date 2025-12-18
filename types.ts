@@ -24,6 +24,23 @@ export interface Stock {
   currentPrice: number;
 }
 
+export interface StockMetadata {
+  symbol: string;
+  name: string;
+  market: string;      // 台股, 美股, 或自行輸入
+  type: string;        // 高股息, 成長型, 市值型, 債券, 或自行輸入
+  industry: string;    // 台灣50, 傳統產業, S&P500... 或自行輸入
+  mode: string;        // 月配, 雙月配, 季配, 半年配, 年配, 不配息
+  frequency: number;   // 12, 6, 4, 2, 1, 0
+  exDivMonths: number[]; // 1-12
+  payMonths: number[];   // 1-12
+  defaultYield: number;  // 預設殖利率
+}
+
+export interface StockMetadataMap {
+  [symbol: string]: StockMetadata;
+}
+
 export interface Donation {
   id: string;
   amount: number;
@@ -49,7 +66,6 @@ export interface Strategy {
   reinvest: boolean;
   expectedAnnualReturn: number;
   expectedDividendYield: number;
-  // 手動覆蓋的年度實戰數據: { "2024": { "1": { divInflow: 100, totalBuy: 500 }, ... } }
   manualActuals?: {
     [year: string]: {
       [month: string]: {
@@ -58,11 +74,6 @@ export interface Strategy {
       }
     }
   };
-}
-
-export interface Portfolio {
-  stocks: Stock[];
-  dividends: Dividend[];
 }
 
 export interface Settings {
@@ -75,7 +86,7 @@ export interface Settings {
 export interface HistoricalPrice {
   stockSymbol: string;
   prices: {
-    [yearMonth: string]: number; // Format: "YYYY-MM"
+    [yearMonth: string]: number;
   };
 }
 

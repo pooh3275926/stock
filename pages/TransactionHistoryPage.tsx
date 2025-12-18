@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Stock, Settings } from '../types';
+import { Stock, Settings, StockMetadataMap } from '../types';
 import { ActionMenu, SearchInput, SortableHeaderCell, SortConfig, SelectionActionBar, StockTags } from '../components/common';
 import { ChevronDownIcon, ChevronUpIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
@@ -11,6 +11,7 @@ type SortDirection = 'asc' | 'desc';
 interface TransactionHistoryPageProps {
     stocks: HistoricalStock[];
     settings: Settings;
+    stockMetadata: StockMetadataMap;
     onBuy: (s: Stock) => void;
     selectedGroups: Set<string>;
     toggleGroupSelection: (symbol: string) => void;
@@ -24,7 +25,7 @@ interface TransactionHistoryPageProps {
     onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;
 }
 
-export const TransactionHistoryPage: React.FC<TransactionHistoryPageProps> = ({ stocks, settings, onBuy, selectedGroups, toggleGroupSelection, clearSelection, deleteSelected, selectedTransactionIds, toggleTransactionSelection, clearTransactionSelection, deleteSelectedTransactions, onEditTransaction, onDeleteTransaction }) => {
+export const TransactionHistoryPage: React.FC<TransactionHistoryPageProps> = ({ stocks, settings, stockMetadata, onBuy, selectedGroups, toggleGroupSelection, clearSelection, deleteSelected, selectedTransactionIds, toggleTransactionSelection, clearTransactionSelection, deleteSelectedTransactions, onEditTransaction, onDeleteTransaction }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'symbol', direction: 'asc' });
 
@@ -73,11 +74,11 @@ export const TransactionHistoryPage: React.FC<TransactionHistoryPageProps> = ({ 
               <SortableHeaderCell label="報酬率" sortKey="realizedReturnRate" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
               <th className="px-6 py-4 font-semibold text-center w-20">操作</th>
           </tr></thead>
-          <tbody>{sortedStocks.map(stock => <GroupedHistoricalStockRow key={stock.symbol} stock={stock} settings={settings} onBuy={onBuy} isSelected={selectedGroups.has(stock.symbol)} toggleSelection={toggleGroupSelection} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</tbody>
+          <tbody>{sortedStocks.map(stock => <GroupedHistoricalStockRow key={stock.symbol} stock={stock} settings={settings} stockMetadata={stockMetadata} onBuy={onBuy} isSelected={selectedGroups.has(stock.symbol)} toggleSelection={toggleGroupSelection} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction} />)}</tbody>
         </table>
       </div>
        <div className="md:hidden space-y-4">
-        {sortedStocks.length > 0 ? sortedStocks.map(stock => <GroupedHistoricalStockCard key={stock.symbol} stock={stock} settings={settings} onBuy={onBuy} isSelected={selectedGroups.has(stock.symbol)} toggleSelection={toggleGroupSelection} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction}/>)
+        {sortedStocks.length > 0 ? sortedStocks.map(stock => <GroupedHistoricalStockCard key={stock.symbol} stock={stock} settings={settings} stockMetadata={stockMetadata} onBuy={onBuy} isSelected={selectedGroups.has(stock.symbol)} toggleSelection={toggleGroupSelection} selectedTransactionIds={selectedTransactionIds} toggleTransactionSelection={toggleTransactionSelection} onEditTransaction={onEditTransaction} onDeleteTransaction={onDeleteTransaction}/>)
         : <div className="text-center p-8 text-light-text/70 dark:text-dark-text/70">沒有歷史交易紀錄</div>
         }
        </div>
@@ -110,7 +111,7 @@ const HistoricalTransactionDetailRow: React.FC<{ detail: any; settings: Settings
     );
 };
 
-const GroupedHistoricalStockRow: React.FC<{ stock: HistoricalStock; settings: Settings; onBuy: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onBuy, isSelected, toggleSelection, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
+const GroupedHistoricalStockRow: React.FC<{ stock: HistoricalStock; settings: Settings; stockMetadata: StockMetadataMap; onBuy: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, stockMetadata, onBuy, isSelected, toggleSelection, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
     const [isOpen, setIsOpen] = useState(false);
     const { financials } = stock;
     const pnlColor = financials.realizedPnl >= 0 ? 'text-success' : 'text-danger';
@@ -135,7 +136,7 @@ const GroupedHistoricalStockRow: React.FC<{ stock: HistoricalStock; settings: Se
             <td className="px-6 py-4">
                 <div className="font-bold">{stock.symbol}</div>
                 <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
-                <StockTags symbol={stock.symbol} />
+                <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
             </td>
             <td className="px-6 py-4 text-right">{financials.totalSharesSold.toLocaleString()}</td>
             <td className="px-6 py-4 text-right">{formatCurrency(avgSellPrice, settings.currency, 2)}</td>
@@ -175,7 +176,7 @@ const HistoricalTransactionDetailCard: React.FC<{ detail: any; settings: Setting
     );
 };
 
-const GroupedHistoricalStockCard: React.FC<{ stock: HistoricalStock; settings: Settings; onBuy: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, onBuy, isSelected, toggleSelection, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
+const GroupedHistoricalStockCard: React.FC<{ stock: HistoricalStock; settings: Settings; stockMetadata: StockMetadataMap; onBuy: (s: Stock) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedTransactionIds: Set<string>; toggleTransactionSelection: (id: string) => void; onEditTransaction: (stockSymbol: string, transactionId: string) => void; onDeleteTransaction: (stockSymbol: string, transactionId: string) => void;}> = ({ stock, settings, stockMetadata, onBuy, isSelected, toggleSelection, selectedTransactionIds, toggleTransactionSelection, onEditTransaction, onDeleteTransaction }) => {
     const [isOpen, setIsOpen] = useState(false);
     const { financials } = stock;
     const pnlColor = financials.realizedPnl >= 0 ? 'text-success' : 'text-danger';
@@ -196,7 +197,7 @@ const GroupedHistoricalStockCard: React.FC<{ stock: HistoricalStock; settings: S
                      <div>
                         <div className="font-bold text-lg">{stock.symbol}</div>
                         <div className="text-sm text-light-text/70 dark:text-dark-text/70">{stock.name}</div>
-                        <StockTags symbol={stock.symbol} />
+                        <StockTags symbol={stock.symbol} stockMetadata={stockMetadata} />
                     </div>
                     <div className={`text-right font-semibold ${pnlColor}`}>
                         <div className="text-lg">{formatCurrency(financials.realizedPnl, settings.currency)}</div>
