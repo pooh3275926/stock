@@ -1,23 +1,24 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { CloseIcon } from './Icons';
-import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice, BudgetEntry } from '../types';
+import type { Stock, Transaction, Dividend, Donation, Settings, HistoricalPrice, BudgetEntry, Strategy } from '../types';
 import { calculateStockFinancials, getLatestHistoricalPrice } from '../utils/calculations';
-import { stockMaster } from '../utils/data';
+import { stockMaster, stockDividendCalendar } from '../utils/data';
 import { ParsedResult } from '../utils/parser';
 
-export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW' | 'BUDGET_ENTRY' | 'UPDATE_ALL_PRICES';
+export type ModalType = 'STOCK_TRANSACTION' | 'DIVIDEND' | 'DONATION_FORM' | 'DELETE_CONFIRMATION' | 'IMPORT_CONFIRMATION' | 'IMPORT_PREVIEW' | 'BUDGET_ENTRY' | 'UPDATE_ALL_PRICES' | 'STRATEGY_FORM';
 export interface ModalState {
   type: ModalType;
   data?: any;
 }
 
 // --- Modal and Forms ---
-export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveDividend: any; onSaveDonation: any; onSaveBudgetEntry: any; onUpdateAllPrices: (prices: { [symbol: string]: number }) => void; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveDividend, onSaveDonation, onSaveBudgetEntry, onUpdateAllPrices, onBulkImport, stocks, settings, historicalPrices }) => {
+export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void; onSaveTransaction: any; onSaveStrategy: any; onSaveDividend: any; onSaveDonation: any; onSaveBudgetEntry: any; onUpdateAllPrices: (prices: { [symbol: string]: number }) => void; onBulkImport: (type: string, data: any[]) => void; stocks: Stock[]; settings: Settings; historicalPrices: HistoricalPrice[];}> = ({ modal, closeModal, onSaveTransaction, onSaveStrategy, onSaveDividend, onSaveDonation, onSaveBudgetEntry, onUpdateAllPrices, onBulkImport, stocks, settings, historicalPrices }) => {
     const renderContent = () => {
         if (!modal.type) return null;
         switch(modal.type) {
             case 'STOCK_TRANSACTION': return <StockTransactionForm stocks={stocks} settings={settings} onSave={onSaveTransaction} onCancel={closeModal} mode={modal.data.mode} stock={modal.data.stock} transaction={modal.data.transaction} historicalPrices={historicalPrices} />;
+            case 'STRATEGY_FORM': return <StrategyForm onSave={onSaveStrategy} onCancel={closeModal} mode={modal.data.mode} strategy={modal.data.strategy} />;
             case 'DIVIDEND': return <DividendForm stocks={stocks} onSave={handleSaveDividend} onCancel={closeModal} mode={modal.data.mode} dividend={modal.data.dividend} />;
             case 'DONATION_FORM': return <DonationForm onSave={handleSaveDonation} onCancel={closeModal} mode={modal.data.mode} donation={modal.data.donation} />;
             case 'DELETE_CONFIRMATION': return <DeleteConfirmation title={modal.data.title} message={modal.data.message} onConfirm={modal.data.onConfirm} onCancel={modal.data.onCancel || closeModal} />;
@@ -34,7 +35,7 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
 
     if (!modal) return null;
     
-    const isLargeModal = modal.type === 'IMPORT_PREVIEW' || modal.type === 'UPDATE_ALL_PRICES';
+    const isLargeModal = modal.type === 'IMPORT_PREVIEW' || modal.type === 'UPDATE_ALL_PRICES' || modal.type === 'STRATEGY_FORM';
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeModal}>
@@ -42,6 +43,91 @@ export const ModalContainer: React.FC<{modal: ModalState; closeModal: () => void
                 {renderContent()}
             </div>
         </div>
+    );
+};
+
+const StrategyForm: React.FC<{ onSave: (s: Omit<Strategy, 'id'>, id?: string) => void; onCancel: () => void; mode: 'add' | 'edit'; strategy?: Strategy; }> = ({ onSave, onCancel, mode, strategy }) => {
+    const [name, setName] = useState(strategy?.name || '');
+    const [targetSymbol, setTargetSymbol] = useState(strategy?.targetSymbol || '');
+    const [initialAmount, setInitialAmount] = useState(strategy?.initialAmount?.toString() || '0');
+    const [monthlyAmount, setMonthlyAmount] = useState(strategy?.monthlyAmount?.toString() || '10000');
+    const [exDivExtraAmount, setExDivExtraAmount] = useState(strategy?.exDivExtraAmount?.toString() || '5000');
+    const [reinvest, setReinvest] = useState(strategy?.reinvest ?? true);
+    const [expectedAnnualReturn, setExpectedAnnualReturn] = useState(strategy?.expectedAnnualReturn?.toString() || '8');
+    const [expectedDividendYield, setExpectedDividendYield] = useState(strategy?.expectedDividendYield?.toString() || '5');
+
+    const calendarInfo = stockDividendCalendar[targetSymbol];
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({
+            name: name || `${targetSymbol} 複利計畫`,
+            targetSymbol,
+            initialAmount: parseFloat(initialAmount),
+            monthlyAmount: parseFloat(monthlyAmount),
+            exDivExtraAmount: parseFloat(exDivExtraAmount),
+            reinvest,
+            expectedAnnualReturn: parseFloat(expectedAnnualReturn),
+            expectedDividendYield: parseFloat(expectedDividendYield),
+        }, strategy?.id);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">{mode === 'edit' ? '編輯' : '新增'}複利實驗策略</h2>
+                <button type="button" onClick={onCancel} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg"><CloseIcon className="h-6 w-6"/></button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-sm font-medium">策略名稱</label>
+                        <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="我的退休計畫" />
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium">目標標的 (例如: 0056)</label>
+                        <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="text" value={targetSymbol} onChange={e => setTargetSymbol(e.target.value.toUpperCase())} required />
+                        {calendarInfo && <p className="text-[10px] text-success mt-1">偵測到資料庫：除息月 {calendarInfo.exDivMonths.join(', ')}</p>}
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium">初始投入金額</label>
+                        <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="number" value={initialAmount} onChange={e => setInitialAmount(e.target.value)} />
+                    </div>
+                    <div className="flex items-center space-x-2 pt-2">
+                        <input type="checkbox" id="reinvest" checked={reinvest} onChange={e => setReinvest(e.target.checked)} className="form-checkbox h-4 w-4 text-primary rounded" />
+                        <label htmlFor="reinvest" className="text-sm font-medium">領息再投入複利</label>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-sm font-medium">每月定額投入</label>
+                        <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="number" value={monthlyAmount} onChange={e => setMonthlyAmount(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium">除息月額外加碼</label>
+                        <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="number" value={exDivExtraAmount} onChange={e => setExDivExtraAmount(e.target.value)} />
+                        <p className="text-[10px] text-light-text/60 mt-1">於偵測到的除息月份執行</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="text-sm font-medium">預期年化 (%)</label>
+                            <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="number" step="0.1" value={expectedAnnualReturn} onChange={e => setExpectedAnnualReturn(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">預期殖利率 (%)</label>
+                            <input className="w-full p-2 mt-1 bg-light-bg dark:bg-dark-bg rounded border border-light-border dark:border-dark-border" type="number" step="0.1" value={expectedDividendYield} onChange={e => setExpectedDividendYield(e.target.value)} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+                <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg">取消</button>
+                <button type="submit" className="px-5 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover">生成策略</button>
+            </div>
+        </form>
     );
 };
 

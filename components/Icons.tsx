@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const DashboardIcon = ({ className }: { className?: string }) => (
@@ -21,6 +22,12 @@ export const DividendIcon = ({ className }: { className?: string }) => (
 export const ChartBarSquareIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M8.25 3.75h3v11.25h-3V3.75zM12.75 3.75h3v11.25h-3V3.75zM17.25 3.75h3v11.25h-3V3.75zM21 16.5H6a2.25 2.25 0 00-2.25 2.25V21" />
+  </svg>
+);
+
+export const StrategyIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18V2.25m0 0l4.5 4.5m-4.5-4.5L7.5 6.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
   </svg>
 );
 

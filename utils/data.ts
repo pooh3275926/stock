@@ -1,5 +1,4 @@
 
-
 export interface StockMetadata {
     name: string;
     market: '台股' | '美股';
@@ -54,7 +53,25 @@ export const stockDefinitions: { [key: string]: StockMetadata } = {
     '5483': { name: '中美晶', market: '台股', type: '成長型', industry: '半導體' },
 };
 
-// Backward compatibility for existing name lookup
+// 複利加碼策略資料庫 (1-indexed months)
+export const stockDividendCalendar: { [key: string]: { exDivMonths: number[], payMonths: number[] } } = {
+    '0050': { exDivMonths: [1, 7], payMonths: [2, 8] },
+    '0056': { exDivMonths: [1, 4, 7, 10], payMonths: [2, 5, 8, 11] },
+    '00881': { exDivMonths: [1, 8], payMonths: [2, 9] },
+    '00918': { exDivMonths: [3, 6, 9, 12], payMonths: [1, 4, 7, 10] },
+    '00919': { exDivMonths: [3, 6, 9, 12], payMonths: [1, 4, 7, 10] },
+    '00922': { exDivMonths: [3, 10], payMonths: [4, 11] },
+};
+
+// 預設殖利率資料庫
+export const stockDefaultYields: { [key: string]: number } = {
+    '0056': 8,
+    '00918': 10,
+    '00919': 10,
+    '00922': 5,
+    '00881': 5,
+};
+
 export const stockMaster: { [key: string]: string } = Object.entries(stockDefinitions).reduce((acc, [key, val]) => {
     acc[key] = val.name;
     return acc;
@@ -102,7 +119,7 @@ export const stockDividendFrequency: { [key: string]: number } = {
     '00983A': 1, 
     '00984A': 4,  
     '00986A': 1,   
-    '00991A': 2,     
+    '00991A': 2,      
     '2330': 4,       
     '5483': 2,    
 };

@@ -39,6 +39,18 @@ export interface BudgetEntry {
   description: string;
 }
 
+export interface Strategy {
+  id: string;
+  name: string;
+  targetSymbol: string;
+  initialAmount: number;
+  monthlyAmount: number;
+  exDivExtraAmount: number;
+  reinvest: boolean;
+  expectedAnnualReturn: number; // 預期年化報酬 (含息)
+  expectedDividendYield: number; // 預期殖利率
+}
+
 export interface Portfolio {
   stocks: Stock[];
   dividends: Dividend[];
@@ -58,4 +70,4 @@ export interface HistoricalPrice {
   };
 }
 
-export type Page = 'DASHBOARD' | 'PORTFOLIO' | 'DIVIDENDS' | 'TOTAL_RETURN' | 'DONATION_FUND' | 'TRANSACTION_HISTORY' | 'HISTORICAL_PRICES' | 'SETTINGS' | 'BUDGET' | 'MORE';
+export type Page = 'DASHBOARD' | 'PORTFOLIO' | 'DIVIDENDS' | 'TOTAL_RETURN' | 'STRATEGY' | 'DONATION_FUND' | 'TRANSACTION_HISTORY' | 'HISTORICAL_PRICES' | 'SETTINGS' | 'BUDGET' | 'MORE';
