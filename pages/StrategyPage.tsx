@@ -90,9 +90,6 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
             </div>
             複利加碼實驗室
           </h1>
-          <p className="text-light-text/70 dark:text-dark-text/90 mt-1 font-medium">
-            除息再投入規劃中心：規劃與對照年度實際成果
-          </p>
         </div>
         <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-white px-8 py-4 rounded-[1.5rem] font-black flex items-center gap-3 shadow-xl shadow-primary/20 transition-all transform hover:scale-105 active:scale-95">
           <PlusIcon className="h-6 w-6" /> 新增實驗標的
