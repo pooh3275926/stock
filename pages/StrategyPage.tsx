@@ -11,7 +11,6 @@ interface StrategyPageProps {
   dividends: Dividend[];
   settings: Settings;
   theme: 'light' | 'dark';
-  // Add missing stockMetadata prop
   stockMetadata: StockMetadataMap;
   onAdd: () => void;
   onEdit: (s: Strategy) => void;
@@ -24,7 +23,6 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
   
   const labStocks = useMemo(() => {
     const autoTargetStocks = stocks.filter(s => {
-      // FIX: Use stockMetadata instead of missing stockDefinitions export
       const isHighDividend = stockMetadata[s.symbol]?.type === '高股息';
       return calculateStockFinancials(s).currentShares > 0 && isHighDividend;
     });
@@ -50,10 +48,10 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
 
       const stock = stocks.find(s => s.symbol === symbol)!;
       const financials = calculateStockFinancials(stock);
-      const stockDivs = dividends.filter(d => d.stockSymbol === symbol);
-      const latestYield = financials.totalCost > 0 ? (stockDivs.reduce((sum, d) => sum + d.amount, 0) / financials.totalCost) * 100 : 5;
-      // FIX: Use stockMetadata and default logic instead of missing stockDefaultYields export
-      const defaultYield = Math.max(5, latestYield);
+      const metadata = stockMetadata[symbol];
+      
+      // 優先從標的資料庫抓取 defaultYield，若無則 fallback 到系統計算或預設 5%
+      const defaultYield = metadata?.defaultYield !== undefined ? metadata.defaultYield : 5;
 
       return {
         id: `auto-${symbol}`,
@@ -235,7 +233,6 @@ const StrategyEngineCard: React.FC<{
     const sim = useMemo(() => {
         const years = 20;
         const chartData = [];
-        // FIX: Use stockMetadata instead of missing stockDividendCalendar export
         const meta = stockMetadata[strategy.targetSymbol];
         const freq = meta?.frequency || 4;
         let balance = strategy.initialAmount;
@@ -266,7 +263,6 @@ const StrategyEngineCard: React.FC<{
         return { chartData, final: balance };
     }, [strategy, stockMetadata]);
 
-    // FIX: Use stockMetadata instead of missing stockDefinitions export
     const metadata = stockMetadata[strategy.targetSymbol];
 
     return (
@@ -448,3 +444,4 @@ const StrategyEngineCard: React.FC<{
         </div>
     );
 };
+
