@@ -1,5 +1,6 @@
+
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -33,14 +34,6 @@
         },
       }
     </script>
-    <script>
-      // On page load or when changing themes, best to add inline in `head` to avoid FOUC
-      if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
-    </script>
   <script type="importmap">
 {
   "imports": {
@@ -53,7 +46,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text transition-colors duration-300">
+  <body class="bg-dark-bg text-dark-text">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

@@ -22,41 +22,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ stockMetadata, onSav
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<CategoryType>('ALL');
 
-  // 智慧分類邏輯
   const categorize = (m: StockMetadata): CategoryType => {
-    // 1. 優先判斷功能性類別 (不分市場)
     if (m.type === '債券') return 'BOND';
     if (m.type === '主動型') return 'ACTIVE';
     if (m.type === '高股息') return 'HIGH_DIV';
-
-    // 2. 判斷個股 (台股規則：4碼且非0開頭)
     const isTwStockCode = m.market === '台股' && m.symbol.length === 4 && !m.symbol.startsWith('0');
-    // 如果不是常見的 ETF 類型 (市值/成長)，且符合個股代號特徵，則歸類為個股
     if (isTwStockCode) return 'STOCK';
-    
-    // 3. 判斷一般 ETF (市值型、成長型)
     if (m.type === '市值型' || m.type === '成長型') return 'GENERAL_ETF';
-
-    // 4. 剩餘情況 (可能是美股個股如 AAPL，或未定義類型的標的)
-    // 如果代號不是純數字或不符合台股 ETF 規則，通常也是個股
     return 'STOCK';
   };
 
   const filteredMetadata = useMemo(() => {
-    const all = Object.values(stockMetadata);
-    
+    // FIX: Cast Object.values to StockMetadata[] to avoid 'unknown' type errors
+    const all = Object.values(stockMetadata) as StockMetadata[];
     return all.filter(m => {
       const matchSearch = m.symbol.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           m.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchSearch) return false;
-
       if (activeCategory === 'ALL') return true;
       return categorize(m) === activeCategory;
     }).sort((a, b) => a.symbol.localeCompare(b.symbol, undefined, { numeric: true }));
   }, [stockMetadata, searchTerm, activeCategory]);
 
   const counts = useMemo(() => {
-    const all = Object.values(stockMetadata);
+    // FIX: Cast Object.values to StockMetadata[] to ensure correct type in categorization logic
+    const all = Object.values(stockMetadata) as StockMetadata[];
     return {
       ALL: all.length,
       STOCK: all.filter(m => categorize(m) === 'STOCK').length,
@@ -78,8 +68,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ stockMetadata, onSav
         const text = e.target?.result;
         if (typeof text !== 'string') throw new Error("File content is not a string");
         const data = JSON.parse(text);
+        if (!data.stocks && !data.stockMetadata) throw new Error("備份檔案格式不正確");
         const confirmImport = () => { onImport(data); if (fileInputRef.current) fileInputRef.current.value = ""; };
-        openModal({ type: 'DELETE_CONFIRMATION', data: { onConfirm: confirmImport, title: '還原備份', message: '這將會覆蓋所有資料與標的庫紀錄。建議先下載目前的備份。' } });
+        openModal({ type: 'DELETE_CONFIRMATION', data: { onConfirm: confirmImport, title: '還原備份資料', message: '這將會覆蓋目前所有的持股紀錄、股利、奉獻及自訂標的資料庫。' } });
       } catch (error) {
         alert('匯入失敗: ' + (error as Error).message);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -89,113 +80,97 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ stockMetadata, onSav
   };
 
   const tabs: { id: CategoryType, label: string }[] = [
-    { id: 'ALL', label: '全部' },
-    { id: 'STOCK', label: '個股專區' },
-    { id: 'ACTIVE', label: '主動式' },
-    { id: 'BOND', label: '債券型 (台美)' },
-    { id: 'HIGH_DIV', label: '高股息 (台美)' },
-    { id: 'GENERAL_ETF', label: '一般 ETF' },
+    { id: 'ALL', label: '全部' }, { id: 'STOCK', label: '個股' }, { id: 'ACTIVE', label: '主動' }, { id: 'BOND', label: '債券' }, { id: 'HIGH_DIV', label: '高息' }, { id: 'GENERAL_ETF', label: '市值型' }
   ];
 
   return (
-    <div className="space-y-10">
-      <h1 className="text-3xl font-black hidden md:block">資料設定</h1>
-      
-      <section className="bg-light-card dark:bg-dark-card p-6 md:p-8 rounded-[2.5rem] shadow-xl border border-light-border dark:border-dark-border">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-            <div>
-                <h2 className="text-2xl font-black flex items-center gap-3 uppercase tracking-tighter">
-                    <div className="p-2 bg-primary/10 rounded-xl"><GridIcon className="h-6 w-6 text-primary" /></div>
-                    標的資料庫管理
-                </h2>
-                <p className="text-sm opacity-60 mt-1 font-medium">自定義標的基本面，系統會自動根據代號特徵與類型進行分區歸類。</p>
-            </div>
-            <button onClick={() => onOpenMetadataModal()} className="w-full md:w-auto bg-primary hover:bg-primary-hover text-white px-8 py-4 rounded-[1.2rem] font-black shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2">
-                <PlusIcon className="h-6 w-6" /> 新增標的
-            </button>
-        </div>
+    <div className="space-y-10 pb-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div>
+              <h1 className="text-2xl font-black flex items-center gap-4 uppercase tracking-tight">
+                  <div className="p-3 bg-primary/10 rounded-2xl"><GridIcon className="h-8 w-8 text-primary" /></div>
+                  標的資料庫
+              </h1>
+              <p className="text-lg opacity-40 mt-2 font-bold uppercase tracking-widest">Global Assets Metadata</p>
+          </div>
+          <button onClick={() => onOpenMetadataModal()} className="w-full md:w-auto bg-primary hover:bg-primary-hover text-white px-8 py-5 rounded-2xl font-black text-lg shadow-xl shadow-primary/20 transition-all flex items-center justify-center gap-3 transform hover:scale-105">
+              <PlusIcon className="h-6 w-6" /> 新增標的
+          </button>
+      </div>
 
-        {/* 智慧分類 Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6 border-b border-light-border dark:border-dark-border pb-4">
+      <section className="bg-dark-card p-8 md:p-10 rounded-[2.5rem] shadow-2xl border border-dark-border">
+        <div className="flex flex-wrap gap-3 mb-10 border-b border-dark-border pb-6">
             {tabs.map(tab => (
-                <button 
-                    key={tab.id}
-                    onClick={() => setActiveCategory(tab.id)}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${activeCategory === tab.id ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-light-bg dark:bg-dark-bg opacity-60 hover:opacity-100'}`}
-                >
-                    {tab.label}
-                    <span className={`px-2 py-0.5 rounded-lg text-[10px] ${activeCategory === tab.id ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>
-                        {counts[tab.id]}
-                    </span>
+                <button key={tab.id} onClick={() => setActiveCategory(tab.id)} className={`px-6 py-3 rounded-2xl text-lg font-black transition-all flex items-center gap-3 ${activeCategory === tab.id ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' : 'bg-dark-bg text-dark-text/40 hover:text-dark-text'}`}>
+                    {tab.label} <span className={`px-3 py-1 rounded-xl text-lg ${activeCategory === tab.id ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>{counts[tab.id]}</span>
                 </button>
             ))}
         </div>
 
-        <div className="relative mb-6">
-            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="搜尋代號或名稱..." className="w-full p-4 pl-12 bg-light-bg dark:bg-dark-bg rounded-2xl border border-light-border dark:border-dark-border focus:ring-4 focus:ring-primary/20 outline-none font-bold" />
-            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary opacity-50" />
+        <div className="relative mb-10">
+            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="搜尋代號或名稱..." className="w-full p-6 pl-16 bg-dark-bg rounded-[2rem] border border-dark-border focus:border-primary outline-none font-black text-lg transition-all" />
+            <SearchIcon className="absolute left-6 top-1/2 -translate-y-1/2 h-8 w-8 text-primary opacity-30" />
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-light-border dark:border-dark-border">
+        <div className="overflow-x-auto rounded-[2rem] border border-dark-border">
             <table className="w-full text-left">
-                <thead className="bg-light-bg dark:bg-dark-bg text-xs font-black uppercase tracking-widest opacity-60">
+                <thead className="bg-dark-bg text-lg font-black uppercase tracking-widest opacity-40">
                     <tr>
-                        <th className="px-6 py-4">代號 / 名稱</th>
-                        <th className="px-6 py-4">市場 / 類型</th>
-                        <th className="px-6 py-4">產業</th>
-                        <th className="px-6 py-4 text-center">配息模式</th>
-                        <th className="px-6 py-4 text-center">殖利率</th>
-                        <th className="px-6 py-4 text-right">操作</th>
+                        <th className="px-8 py-6">代號 / 名稱</th>
+                        <th className="px-8 py-6">市場/類型</th>
+                        <th className="px-8 py-6">產業板塊</th>
+                        <th className="px-8 py-6 text-center">配息模式</th>
+                        <th className="px-8 py-6 text-center">殖利率</th>
+                        <th className="px-8 py-6 text-right">管理</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-light-border dark:divide-dark-border">
+                <tbody className="divide-y divide-dark-border text-lg font-bold">
                     {filteredMetadata.map(meta => (
                         <tr key={meta.symbol} className="hover:bg-primary/5 transition-colors">
-                            <td className="px-6 py-4">
-                                <div className="font-black text-lg">{meta.symbol}</div>
-                                <div className="text-xs font-bold opacity-60">{meta.name}</div>
+                            <td className="px-8 py-7">
+                                <div className="font-black text-2xl tracking-tighter">{meta.symbol}</div>
+                                <div className="text-lg font-bold opacity-40">{meta.name}</div>
                             </td>
-                            <td className="px-6 py-4">
-                                <div className="flex gap-1">
-                                    <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-lg text-[10px] font-black">{meta.market}</span>
-                                    <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-[10px] font-black">{meta.type}</span>
+                            <td className="px-8 py-7">
+                                <div className="flex flex-col gap-2">
+                                    <span className="px-3 py-1 bg-primary/20 text-primary rounded-lg text-lg font-black self-start uppercase">{meta.market}</span>
+                                    <span className="px-3 py-1 bg-white/5 text-dark-text/60 rounded-lg text-lg font-black self-start uppercase">{meta.type}</span>
                                 </div>
                             </td>
-                            <td className="px-6 py-4 font-bold text-sm">{meta.industry}</td>
-                            <td className="px-6 py-4 text-center">
-                                <div className="text-sm font-black">{meta.mode}</div>
-                                <div className="text-[10px] opacity-50 font-bold">除息月: {meta.exDivMonths.join(', ') || '無'}</div>
+                            <td className="px-8 py-7 font-black text-lg tracking-tight uppercase">{meta.industry}</td>
+                            <td className="px-8 py-7 text-center">
+                                <div className="text-lg font-black">{meta.mode}</div>
+                                <div className="text-lg opacity-40 font-black mt-1 uppercase tracking-tighter">EX: {meta.exDivMonths.join(',') || '-'}</div>
                             </td>
-                            <td className="px-6 py-4 text-center font-black text-success">{meta.defaultYield}%</td>
-                            <td className="px-6 py-4 text-right">
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => onOpenMetadataModal(meta)} className="p-2 hover:bg-primary/10 text-primary rounded-xl transition-all"><EditIcon className="h-5 w-5" /></button>
-                                    <button onClick={() => onDeleteMetadata(meta.symbol)} className="p-2 hover:bg-danger/10 text-danger rounded-xl transition-all"><TrashIcon className="h-5 w-5" /></button>
+                            <td className="px-8 py-7 text-center">
+                                <div className="inline-block px-5 py-2 bg-success/10 text-success rounded-xl border border-success/20 font-black text-xl">{meta.defaultYield}%</div>
+                            </td>
+                            <td className="px-8 py-7 text-right">
+                                <div className="flex justify-end gap-5">
+                                    <button onClick={() => onOpenMetadataModal(meta)} className="p-3 hover:bg-primary/10 text-primary rounded-2xl transition-all"><EditIcon className="h-7 w-7" /></button>
+                                    <button onClick={() => onDeleteMetadata(meta.symbol)} className="p-3 hover:bg-danger/10 text-danger rounded-2xl transition-all"><TrashIcon className="h-7 w-7" /></button>
                                 </div>
                             </td>
                         </tr>
                     ))}
-                    {filteredMetadata.length === 0 && (
-                        <tr><td colSpan={6} className="px-6 py-12 text-center opacity-40 font-bold italic">在此分類中找不到相符的標的項目</td></tr>
-                    )}
                 </tbody>
             </table>
         </div>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-light-card dark:bg-dark-card p-8 rounded-[2.5rem] shadow-xl border border-light-border dark:border-dark-border">
-          <h2 className="text-xl font-black mb-2">資料匯出 (JSON)</h2>
-          <p className="text-sm opacity-60 mb-6 font-medium">下載完整備份檔案，包含所有持股紀錄與自訂標的庫。</p>
-          <button onClick={onExport} className="w-full bg-primary/10 text-primary hover:bg-primary hover:text-white font-black py-4 rounded-2xl flex items-center justify-center transition-all"><DownloadIcon className="h-5 w-5 mr-2" /> 下載備份檔案</button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div className="bg-dark-card p-10 rounded-[3rem] border border-dark-border shadow-2xl">
+          <h2 className="text-xl font-black mb-2 flex items-center gap-3"><DownloadIcon className="h-8 w-8 text-primary" /> 備份匯出</h2>
+          <p className="text-lg opacity-40 mb-10 font-bold uppercase tracking-widest">Backup & Export</p>
+          <button onClick={onExport} className="w-full bg-primary/10 text-primary hover:bg-primary hover:text-white font-black py-6 rounded-3xl text-lg flex items-center justify-center transition-all shadow-sm">立即下載備份</button>
         </div>
-        <div className="bg-light-card dark:bg-dark-card p-8 rounded-[2.5rem] shadow-xl border border-light-border dark:border-dark-border">
-          <h2 className="text-xl font-black mb-2">資料還原 (JSON)</h2>
-          <p className="text-sm text-danger/80 mb-6 font-bold">警告：還原備份將會覆蓋目前所有資料且無法復原！</p>
-          <button onClick={handleImportClick} className="w-full border-2 border-danger/40 text-danger hover:bg-danger hover:text-white font-black py-4 rounded-2xl flex items-center justify-center transition-all"><UploadIcon className="h-5 w-5 mr-2" /> 選取備份匯入</button>
+        <div className="bg-dark-card p-10 rounded-[3rem] border border-dark-border shadow-2xl">
+          <h2 className="text-xl font-black mb-2 flex items-center gap-3 text-danger"><UploadIcon className="h-8 w-8" /> 資料還原</h2>
+          <p className="text-lg text-danger/40 mb-10 font-bold uppercase tracking-widest">Restore Data</p>
+          <button onClick={handleImportClick} className="w-full border-2 border-danger/40 text-danger hover:bg-danger hover:text-white font-black py-6 rounded-3xl text-lg flex items-center justify-center transition-all shadow-sm">選取備份檔案</button>
           <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
         </div>
-      </section>
+      </div>
     </div>
   );
 };

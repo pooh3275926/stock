@@ -330,7 +330,13 @@ const UpdateAllPricesForm: React.FC<{
     const [prices, setPrices] = useState<{ [symbol: string]: string }>({});
     const sortedStocks = useMemo(() => { return [...stocks].sort((a, b) => a.symbol.localeCompare(b.symbol, undefined, { numeric: true })); }, [stocks]);
     useEffect(() => { const initialPrices = stocks.reduce((acc, stock) => { acc[stock.symbol] = stock.currentPrice?.toString() || ''; return acc; }, {} as any); setPrices(initialPrices); }, [stocks]);
-    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); const numericPrices: any = {}; Object.entries(prices).forEach(([s, p]) => { if(p.trim() !== '') numericPrices[s] = parseFloat(p); }); onSave(numericPrices); };
+    const handleSubmit = (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        const numericPrices: any = {}; 
+        // FIX: Explicitly cast Object.entries to [string, string][] to avoid unknown types for p.trim() and parseFloat(p)
+        (Object.entries(prices) as [string, string][]).forEach(([s, p]) => { if(p.trim() !== '') numericPrices[s] = parseFloat(p); }); 
+        onSave(numericPrices); 
+    };
     return (
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
             <div className="flex justify-between items-center"><h2 className="text-2xl font-black">一鍵更新股價</h2><button type="button" onClick={onCancel} className="p-2 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg"><CloseIcon className="h-6 w-6"/></button></div>

@@ -40,6 +40,7 @@ export const initialStockMetadataMap: StockMetadataMap = {
     '00858': { symbol: '00858', name: '永豐美國500大', market: '美股', type: '高股息', industry: 'S&P500', mode: '半年配', frequency: 2, exDivMonths: [1, 7], payMonths: [2, 8], defaultYield: 5 },
     '00924': { symbol: '00924', name: '復華S&P500成長', market: '美股', type: '成長型', industry: 'S&P500', mode: '不配息', frequency: 0, exDivMonths: [], payMonths: [], defaultYield: 0 },
     '00895': { symbol: '00895', name: '富邦未來車', market: '美股', type: '成長型', industry: 'NASDAQ', mode: '不配息', frequency: 0, exDivMonths: [], payMonths: [], defaultYield: 0 },
+    '009813': { symbol: '009813', name: '貝萊德標普卓越50', market: '美股', type: '成長型', industry: 'S&P500', mode: '不配息', frequency: 0, exDivMonths: [], payMonths: [], defaultYield: 0 },
 
     // --- 新增資料 (主動型基金 ETF) ---
     '00980A': { symbol: '00980A', name: '主動野村臺灣優選', market: '台股', type: '主動型', industry: '科技', mode: '季配', frequency: 4, exDivMonths: [2, 5, 8, 11], payMonths: [3, 6, 9, 12], defaultYield: 6 },

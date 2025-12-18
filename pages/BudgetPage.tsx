@@ -1,8 +1,9 @@
+
 import React, { useMemo, useState } from 'react';
 import type { Stock, Dividend, Donation, BudgetEntry, Settings } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { ActionMenu, SelectionActionBar } from '../components/common';
-import { PlusIcon, EditIcon, TrashIcon } from '../components/Icons';
+import { PlusIcon, BudgetIcon } from '../components/Icons';
 import { formatCurrency } from '../utils/calculations';
 
 interface LedgerItem {
@@ -16,190 +17,53 @@ interface LedgerItem {
   isEditable: boolean;
 }
 
-interface BudgetPageProps {
-  stocks: Stock[];
-  dividends: Dividend[];
-  donations: Donation[];
-  budgetEntries: BudgetEntry[];
-  settings: Settings;
-  onAdd: () => void;
-  onEdit: (entry: BudgetEntry) => void;
-  onDelete: (entry: BudgetEntry) => void;
-  selectedIds: Set<string>;
-  toggleSelection: (id: string) => void;
-  clearSelection: () => void;
-  deleteSelected: () => void;
-}
-
-export const BudgetPage: React.FC<BudgetPageProps> = ({ stocks, dividends, donations, budgetEntries, settings, onAdd, onEdit, onDelete, selectedIds, toggleSelection, clearSelection, deleteSelected }) => {
-  const [filter, setFilter] = useState('all');
-
+export const BudgetPage: React.FC<any> = ({ stocks, dividends, donations, budgetEntries, settings, onAdd, onEdit, onDelete, selectedIds, toggleSelection, clearSelection, deleteSelected }) => {
   const { ledger, totalInflow, totalOutflow, finalBalance } = useMemo(() => {
-    const rawItems: Omit<LedgerItem, 'balance'>[] = [];
-
-    // Process manual budget entries
-    budgetEntries.forEach(entry => {
-      rawItems.push({
-        id: entry.id,
-        date: entry.date,
-        description: entry.description,
-        source: 'manual',
-        inflow: entry.type === 'DEPOSIT' ? entry.amount : 0,
-        outflow: entry.type === 'WITHDRAWAL' ? entry.amount : 0,
-        isEditable: true,
-      });
-    });
-
-    // Process stock transactions
-    stocks.forEach(stock => {
-      stock.transactions.forEach(tx => {
-        if (tx.type === 'BUY') {
-          rawItems.push({
-            id: tx.id,
-            date: tx.date,
-            description: `買入 ${stock.symbol} ${stock.name}`,
-            source: 'stock',
-            inflow: 0,
-            outflow: tx.shares * tx.price + tx.fees,
-            isEditable: false,
-          });
-        } else { // SELL
-          rawItems.push({
-            id: tx.id,
-            date: tx.date,
-            description: `賣出 ${stock.symbol} ${stock.name}`,
-            source: 'stock',
-            inflow: tx.shares * tx.price - tx.fees,
-            outflow: 0,
-            isEditable: false,
-          });
-        }
-      });
-    });
-
-    // Process dividends
-    dividends.forEach(dividend => {
-      rawItems.push({
-        id: dividend.id,
-        date: dividend.date,
-        description: `股利 ${dividend.stockSymbol}`,
-        source: 'dividend',
-        inflow: dividend.amount,
-        outflow: 0,
-        isEditable: false,
-      });
-    });
-
-    // Process donations
-    donations.forEach(donation => {
-      rawItems.push({
-        id: donation.id,
-        date: donation.date,
-        description: `奉獻: ${donation.description}`,
-        source: 'donation',
-        inflow: 0,
-        outflow: donation.amount,
-        isEditable: false,
-      });
-    });
-
-    const sortedItems = rawItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
+    const rawItems: any[] = [];
+    budgetEntries.forEach((entry:any) => rawItems.push({ id: entry.id, date: entry.date, description: entry.description, source: 'manual', inflow: entry.type === 'DEPOSIT' ? entry.amount : 0, outflow: entry.type === 'WITHDRAWAL' ? entry.amount : 0, isEditable: true }));
+    stocks.forEach((stock:any) => stock.transactions.forEach((tx:any) => rawItems.push({ id: tx.id, date: tx.date, description: `${tx.type === 'BUY' ? '買入' : '賣出'} ${stock.symbol} ${stock.name}`, source: 'stock', inflow: tx.type === 'SELL' ? tx.shares * tx.price - tx.fees : 0, outflow: tx.type === 'BUY' ? tx.shares * tx.price + tx.fees : 0, isEditable: false })));
+    dividends.forEach((dividend:any) => rawItems.push({ id: dividend.id, date: dividend.date, description: `領取股利: ${dividend.stockSymbol}`, source: 'dividend', inflow: dividend.amount, outflow: 0, isEditable: false }));
+    donations.forEach((donation:any) => rawItems.push({ id: donation.id, date: donation.date, description: `奉獻支出: ${donation.description}`, source: 'donation', inflow: 0, outflow: donation.amount, isEditable: false }));
+    
+    const sorted = rawItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     let balance = 0;
-    const ledger: LedgerItem[] = sortedItems.map(item => {
-      balance = balance + item.inflow - item.outflow;
-      return { ...item, balance };
-    });
-
-    const totalInflow = ledger.reduce((sum, item) => sum + item.inflow, 0);
-    const totalOutflow = ledger.reduce((sum, item) => sum + item.outflow, 0);
-
-    return { ledger: ledger.reverse(), totalInflow, totalOutflow, finalBalance: balance };
+    const ledger = sorted.map(item => { balance += (item.inflow - item.outflow); return { ...item, balance }; }).reverse();
+    return { ledger, totalInflow: rawItems.reduce((s,i) => s+i.inflow,0), totalOutflow: rawItems.reduce((s,i) => s+i.outflow,0), finalBalance: balance };
   }, [stocks, dividends, donations, budgetEntries]);
-  
-  const filteredLedger = useMemo(() => {
-    if (filter === 'all') return ledger;
-    return ledger.filter(item => item.source === filter);
-  }, [ledger, filter]);
-
-  const selectionActive = selectedIds.size > 0;
 
   return (
-    <div className="space-y-6" onClick={(e) => { if(selectionActive) { const target = e.target as HTMLElement; if(!target.closest('.selectable-item, .selection-bar')) { clearSelection(); } } }}>
-      <h1 className="text-3xl font-bold hidden md:block">投資預算</h1>
+    <div className="space-y-10 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div><h1 className="text-2xl font-black tracking-tight uppercase">現金流帳本</h1><p className="text-lg opacity-40 font-bold mt-1 tracking-widest uppercase">Budget & Cash Ledger</p></div>
+        <button onClick={onAdd} className="w-full md:w-auto bg-primary hover:bg-primary-hover text-white px-8 py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-primary/20 transition-all"><PlusIcon className="h-6 w-6" /> 手動存提記錄</button>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <KpiCard title="總流入" value={formatCurrency(totalInflow, settings.currency)} />
-        <KpiCard title="總流出" value={formatCurrency(totalOutflow, settings.currency)} />
-        <KpiCard title="目前餘額" value={formatCurrency(finalBalance, settings.currency)} />
+        <KpiCard title="累計資金流入" value={formatCurrency(totalInflow, settings.currency)} />
+        <KpiCard title="累計資金流出" value={formatCurrency(totalOutflow, settings.currency)} />
+        <KpiCard title="當前總帳餘額" value={formatCurrency(finalBalance, settings.currency)} />
       </div>
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-         <div className="w-full sm:w-auto flex-shrink-0">
-             <button onClick={onAdd} className="w-full bg-primary hover:bg-primary-hover text-primary-foreground font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2">
-                <PlusIcon className="h-5 w-5" /> 手動新增
-            </button>
-         </div>
-      </div>
-       {selectionActive && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedIds.size} onCancel={clearSelection} onDelete={deleteSelected} itemName="筆手動紀錄"/></div>}
-      
-       <div className="md:hidden space-y-4">{filteredLedger.map(item => <LedgerCard key={`${item.source}-${item.id}`} item={item} settings={settings} onEdit={() => onEdit(budgetEntries.find(e => e.id === item.id)!)} onDelete={() => onDelete(budgetEntries.find(e => e.id === item.id)!)} isSelected={selectedIds.has(item.id)} toggleSelection={toggleSelection}/>)}</div>
-       
-      <div className="hidden md:block bg-light-card dark:bg-dark-card rounded-lg shadow-md">
-        <table className="w-full text-left">
-          <thead className="bg-light-bg dark:bg-dark-bg"><tr>
-            <th className="px-6 py-4 w-12"></th>
-            <th className="px-6 py-4 font-semibold">日期</th>
-            <th className="px-6 py-4 font-semibold">說明</th>
-            <th className="px-6 py-4 font-semibold text-right">流入 (+)</th>
-            <th className="px-6 py-4 font-semibold text-right">流出 (-)</th>
-            <th className="px-6 py-4 font-semibold text-right">餘額</th>
-            <th className="px-6 py-4 font-semibold text-center w-20">操作</th>
-          </tr></thead>
-          <tbody>{filteredLedger.map(item => <LedgerRow key={`${item.source}-${item.id}`} item={item} settings={settings} onEdit={() => onEdit(budgetEntries.find(e => e.id === item.id)!)} onDelete={() => onDelete(budgetEntries.find(e => e.id === item.id)!)} isSelected={selectedIds.has(item.id)} toggleSelection={toggleSelection}/>)}</tbody>
-        </table>
+
+      {selectedIds.size > 0 && <SelectionActionBar count={selectedIds.size} onCancel={clearSelection} onDelete={deleteSelected} itemName="筆手動紀錄"/>}
+
+      <div className="grid grid-cols-1 gap-6">
+        {ledger.map((item: LedgerItem) => (
+            <div key={`${item.source}-${item.id}`} onClick={() => item.isEditable && toggleSelection(item.id)} className={`bg-dark-card rounded-[2rem] p-6 border transition-all ${item.isEditable ? 'cursor-pointer hover:border-primary/40' : 'opacity-80'} ${selectedIds.has(item.id) ? 'border-primary ring-4 ring-primary/10' : 'border-dark-border'}`}>
+                <div className="flex flex-col md:flex-row justify-between gap-6">
+                    <div className="flex items-start gap-4">
+                        {item.isEditable && <div className="p-1 bg-dark-bg/50 rounded-lg" onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-dark-card border-dark-border rounded" checked={selectedIds.has(item.id)} onChange={() => toggleSelection(item.id)}/></div>}
+                        <div><div className="text-xl font-black">{item.description}</div><div className="text-sm opacity-40 font-bold mt-1 tracking-widest uppercase font-black">{new Date(item.date).toLocaleDateString()} • {item.source}</div></div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-10 md:justify-end text-lg font-bold">
+                        {item.inflow > 0 && <div className="text-right"><div className="text-sm font-black opacity-30 uppercase mb-1">流入</div><div className="text-xl font-black text-success">+{formatCurrency(item.inflow, settings.currency)}</div></div>}
+                        {item.outflow > 0 && <div className="text-right"><div className="text-sm font-black opacity-30 uppercase mb-1">流出</div><div className="text-xl font-black text-danger">-{formatCurrency(item.outflow, settings.currency)}</div></div>}
+                        <div className="text-right border-l border-dark-border pl-10"><div className="text-sm font-black opacity-30 uppercase mb-1">結餘</div><div className="text-xl font-black opacity-60">{formatCurrency(item.balance, settings.currency)}</div></div>
+                        {item.isEditable && <div onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(budgetEntries.find((e:any) => e.id === item.id))} onDelete={() => onDelete(budgetEntries.find((e:any) => e.id === item.id))} /></div>}
+                    </div>
+                </div>
+            </div>
+        ))}
       </div>
     </div>
   );
 };
-
-
-const LedgerRow: React.FC<{item: LedgerItem, settings: Settings, onEdit: () => void, onDelete: () => void, isSelected: boolean, toggleSelection: (id: string) => void}> = ({ item, settings, onEdit, onDelete, isSelected, toggleSelection }) => (
-    <tr onClick={() => item.isEditable && toggleSelection(item.id)} className={`border-b border-light-border dark:border-dark-border last:border-b-0 ${item.isEditable ? 'hover:bg-light-bg dark:hover:bg-dark-bg cursor-pointer selectable-item' : ''} ${isSelected ? 'bg-primary/10 dark:bg-primary/20' : ''}`}>
-        <td className="px-6 py-4" onClick={e => item.isEditable && e.stopPropagation()}>
-            {item.isEditable && <input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(item.id)} />}
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">{new Date(item.date).toLocaleDateString()}</td>
-        <td className="px-6 py-4">{item.description}</td>
-        <td className="px-6 py-4 text-right text-success">{item.inflow > 0 ? formatCurrency(item.inflow, settings.currency) : '-'}</td>
-        <td className="px-6 py-4 text-right text-danger">{item.outflow > 0 ? formatCurrency(item.outflow, settings.currency) : '-'}</td>
-        <td className="px-6 py-4 text-right font-semibold">{formatCurrency(item.balance, settings.currency)}</td>
-        <td className="px-6 py-4 text-center" onClick={e => item.isEditable && e.stopPropagation()}>
-          {item.isEditable && <ActionMenu onEdit={onEdit} onDelete={onDelete} />}
-        </td>
-    </tr>
-);
-
-const LedgerCard: React.FC<{item: LedgerItem, settings: Settings, onEdit: () => void, onDelete: () => void, isSelected: boolean, toggleSelection: (id: string) => void}> = ({ item, settings, onEdit, onDelete, isSelected, toggleSelection }) => (
-    <div onClick={() => item.isEditable && toggleSelection(item.id)} className={`bg-light-card dark:bg-dark-card rounded-lg shadow-md p-4 flex items-start space-x-4 ${item.isEditable ? 'selectable-item' : ''} ${isSelected ? 'bg-primary/10 dark:bg-primary/20 ring-2 ring-primary' : ''}`}>
-        {item.isEditable && <div className="pt-1" onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(item.id)}/></div>}
-        <div className="flex-grow flex flex-col">
-            <div className="flex justify-between items-start">
-                <div>
-                    <div className="font-bold">{item.description}</div>
-                    <div className="text-sm text-light-text/70 dark:text-dark-text/70">{new Date(item.date).toLocaleDateString()}</div>
-                </div>
-                {item.isEditable && <div className="flex-shrink-0" onClick={e => e.stopPropagation()}><ActionMenu onEdit={onEdit} onDelete={onDelete} /></div>}
-            </div>
-            <div className="border-t border-light-border dark:border-dark-border my-3"></div>
-            <div className="flex justify-between items-baseline">
-                <div>
-                    {item.inflow > 0 && <div className="text-success">流入: {formatCurrency(item.inflow, settings.currency)}</div>}
-                    {item.outflow > 0 && <div className="text-danger">流出: {formatCurrency(item.outflow, settings.currency)}</div>}
-                </div>
-                <div className="text-right">
-                    <span className="text-sm text-light-text/70 dark:text-dark-text/70">餘額</span>
-                    <div className="font-semibold text-lg">{formatCurrency(item.balance, settings.currency)}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-);

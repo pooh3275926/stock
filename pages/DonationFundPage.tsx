@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { KpiCard } from '../components/KpiCard';
 import { ActionMenu, SelectionActionBar } from '../components/common';
@@ -27,51 +28,44 @@ export const DonationFundPage: React.FC<DonationFundPageProps> = ({ stats, donat
     const balance = allotment - totalDonated;
 
     return (
-    <div className="space-y-6" onClick={(e) => { if(selectionActive) { const target = e.target as HTMLElement; if(!target.closest('.selectable-item, .selection-bar')) { clearSelection(); } } }}>
-        <h1 className="text-3xl font-bold hidden md:block">奉獻基金</h1>
+    <div className="space-y-10 pb-20">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div><h1 className="text-2xl font-black tracking-tight uppercase">奉獻基金管理</h1><p className="text-lg opacity-40 font-bold mt-1 tracking-widest uppercase">Giving & Impact Fund</p></div>
+            <button onClick={onAdd} className="w-full md:w-auto bg-primary hover:bg-primary-hover text-white px-8 py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-primary/20 transition-all"><PlusIcon className="h-6 w-6" /> 新增奉獻支出</button>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <KpiCard title="提撥總額 (收益10%)" value={formatCurrency(allotment, settings.currency)} />
-            <KpiCard title="已奉獻金額" value={formatCurrency(totalDonated, settings.currency)} />
-            <KpiCard title="基金餘額" value={formatCurrency(balance, settings.currency)} />
+            <KpiCard title="基金存量 (收益10%)" value={formatCurrency(allotment, settings.currency)} />
+            <KpiCard title="累計已奉獻" value={formatCurrency(totalDonated, settings.currency)} />
+            <KpiCard title="目前基金餘額" value={formatCurrency(balance, settings.currency)} />
         </div>
-        <div className="flex items-center justify-end gap-4">
-            <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold py-2 px-4 rounded-lg flex items-center gap-2">
-                <PlusIcon className="h-5 w-5" /> 新增奉獻
-            </button>
-        </div>
-        {selectionActive && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedIds.size} onCancel={clearSelection} onDelete={deleteSelected} /></div>}
+
+        {selectionActive && <SelectionActionBar count={selectedIds.size} onCancel={clearSelection} onDelete={deleteSelected} />}
         
-        <div className="md:hidden space-y-4">{sortedDonations.map(d => <DonationCard key={d.id} donation={d} settings={settings} onEdit={onEdit} onDelete={onDelete} isSelected={selectedIds.has(d.id)} toggleSelection={toggleSelection} />)}</div>
-        
-        <div className="hidden md:block bg-light-card dark:bg-dark-card rounded-lg shadow-md">
-            <table className="w-full text-left">
-                <thead className="bg-light-bg dark:bg-dark-bg"><tr><th className="px-6 py-4 w-12"></th><th className="px-6 py-4 font-semibold">日期</th><th className="px-6 py-4 font-semibold">說明</th><th className="px-6 py-4 font-semibold text-right">金額</th><th className="px-6 py-4 font-semibold text-center w-20">操作</th></tr></thead>
-                <tbody>{sortedDonations.map(d => <DonationRow key={d.id} donation={d} settings={settings} onEdit={onEdit} onDelete={onDelete} isSelected={selectedIds.has(d.id)} toggleSelection={toggleSelection} />)}</tbody>
+        <div className="bg-dark-card rounded-[2rem] border border-dark-border shadow-xl overflow-hidden">
+            <table className="w-full text-left text-lg font-bold">
+                <thead className="bg-dark-bg/50 opacity-40 uppercase tracking-widest font-black">
+                    <tr>
+                        <th className="px-8 py-4 w-12 text-center"></th>
+                        <th className="px-8 py-4">日期</th>
+                        <th className="px-8 py-4">用途說明</th>
+                        <th className="px-8 py-4 text-right">金額</th>
+                        <th className="px-8 py-4 text-center w-24">操作</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-border">
+                    {sortedDonations.map(d => (
+                        <tr key={d.id} onClick={() => toggleSelection(d.id)} className={`hover:bg-primary/5 transition-colors cursor-pointer ${selectedIds.has(d.id) ? 'bg-primary/10' : ''}`}>
+                            <td className="px-8 py-5 text-center" onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-dark-bg border-dark-border rounded focus:ring-primary" checked={selectedIds.has(d.id)} onChange={() => toggleSelection(d.id)} /></td>
+                            <td className="px-8 py-5 font-black">{new Date(d.date).toLocaleDateString()}</td>
+                            <td className="px-8 py-5">{d.description}</td>
+                            <td className="px-8 py-5 text-right font-black text-success">{formatCurrency(d.amount, settings.currency)}</td>
+                            <td className="px-8 py-5 text-center" onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} /></td>
+                        </tr>
+                    ))}
+                </tbody>
             </table>
         </div>
     </div>
     );
 };
-
-// --- Child Components ---
-
-const DonationRow: React.FC<{donation: Donation; settings: Settings; onEdit: (d: Donation) => void; onDelete: (d: Donation) => void; isSelected: boolean; toggleSelection: (id: string) => void;}> = ({ donation, settings, onEdit, onDelete, isSelected, toggleSelection }) => (
-    <tr onClick={() => toggleSelection(donation.id)} className={`border-b border-light-border dark:border-dark-border last:border-b-0 hover:bg-light-bg dark:hover:bg-dark-bg cursor-pointer selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20' : ''}`}>
-        <td className="px-6 py-4" onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(donation.id)} /></td>
-        <td className="px-6 py-4">{new Date(donation.date).toLocaleDateString()}</td>
-        <td className="px-6 py-4">{donation.description}</td>
-        <td className="px-6 py-4 text-right">{formatCurrency(donation.amount, settings.currency)}</td>
-        <td className="px-6 py-4 text-center" onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(donation)} onDelete={() => onDelete(donation)} /></td>
-    </tr>
-);
-
-const DonationCard: React.FC<{donation: Donation, settings: Settings, onEdit: (d: Donation) => void; onDelete: (d: Donation) => void; isSelected: boolean; toggleSelection: (id: string) => void;}> = ({ donation, settings, onEdit, onDelete, isSelected, toggleSelection }) => (
-    <div className={`bg-light-card dark:bg-dark-card rounded-lg shadow-md p-4 flex items-center space-x-4 selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20 ring-2 ring-primary' : ''}`} onClick={() => toggleSelection(donation.id)}>
-        <div onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(donation.id)}/></div>
-        <div className="flex-grow flex justify-between items-center">
-            <div><div className="font-bold">{donation.description}</div><div className="text-sm text-light-text/70 dark:text-dark-text/70">{new Date(donation.date).toLocaleDateString()}</div></div>
-            <div className="font-semibold text-lg">{formatCurrency(donation.amount, settings.currency)}</div>
-        </div>
-        <div className="flex-shrink-0" onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(donation)} onDelete={() => onDelete(donation)} /></div>
-    </div>
-);

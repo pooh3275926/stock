@@ -1,7 +1,5 @@
 
-
 import React, { useMemo } from 'react';
-// FIX: Added AreaChart to the import from recharts to resolve 'Cannot find name' errors.
 import { Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Area, AreaChart, LineChart, PieChart, Pie } from 'recharts';
 import { Stock, Dividend, Transaction, HistoricalPrice } from '../types';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
@@ -12,13 +10,24 @@ const COLOR_DANGER = '#C08581';
 const COLOR_PRIMARY = '#B08968';
 const COLOR_SECONDARY = '#AEC5D1';
 
+const AXIS_COLOR = '#EAE1D4';
+const GRID_COLOR = '#403D39';
+const TOOLTIP_BG = '#403D39';
+const TEXT_COLOR = '#F5F1E9';
+
+const tooltipStyle = {
+    backgroundColor: TOOLTIP_BG,
+    border: '1px solid',
+    borderColor: GRID_COLOR,
+    color: TEXT_COLOR,
+    borderRadius: '0.5rem',
+};
 
 // --- Advanced Monthly Dividend Chart ---
 interface AdvancedMonthlyDividendChartProps {
     dividends: Dividend[];
-    theme: 'light' | 'dark';
 }
-export const AdvancedMonthlyDividendChart: React.FC<AdvancedMonthlyDividendChartProps> = ({ dividends, theme }) => {
+export const AdvancedMonthlyDividendChart: React.FC<AdvancedMonthlyDividendChartProps> = ({ dividends }) => {
     const chartData = useMemo(() => {
         let cumulative = 0;
         const months = Array.from({ length: 12 }, (_, i) => ({
@@ -38,29 +47,19 @@ export const AdvancedMonthlyDividendChart: React.FC<AdvancedMonthlyDividendChart
     }, [dividends]);
 
     if (dividends.length === 0) {
-        return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">本年度無股利資料</div>;
+        return <div className="flex items-center justify-center h-full text-dark-text/60">本年度無股利資料</div>;
     }
-
-    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
-    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
-    const tooltipStyle = {
-        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
-        border: '1px solid',
-        borderColor: gridColor,
-        color: theme === 'dark' ? '#F5F1E9' : '#6B6358',
-        borderRadius: '0.5rem',
-    };
 
     return (
         <ResponsiveContainer width="100%" height={350}>
             <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis dataKey="name" stroke={axisColor} />
-                <YAxis yAxisId="left" stroke={axisColor} tickFormatter={(value) => value.toLocaleString()} />
-                <YAxis yAxisId="right" orientation="right" stroke={axisColor} tickFormatter={(value) => value.toLocaleString()} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                <XAxis dataKey="name" stroke={AXIS_COLOR} />
+                <YAxis yAxisId="left" stroke={AXIS_COLOR} tickFormatter={(value) => value.toLocaleString()} />
+                <YAxis yAxisId="right" orientation="right" stroke={AXIS_COLOR} tickFormatter={(value) => value.toLocaleString()} />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
+                    labelStyle={{ color: TEXT_COLOR }}
                     formatter={(value: number) => `NT$${value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
                 />
                 <Legend />
@@ -79,34 +78,23 @@ interface ContributionChartData {
 }
 interface ProfitLossBarChartProps {
     data: ContributionChartData[];
-    theme: 'light' | 'dark';
     unit?: 'currency' | 'percent';
 }
-export const ProfitLossBarChart: React.FC<ProfitLossBarChartProps> = ({ data, theme, unit = 'currency' }) => {
+export const ProfitLossBarChart: React.FC<ProfitLossBarChartProps> = ({ data, unit = 'currency' }) => {
     if (!data || data.length === 0) {
-        return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
+        return <div className="flex items-center justify-center h-full text-dark-text/60">無資料可顯示</div>;
     }
     
-    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
-    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
-    const tooltipStyle = {
-        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
-        border: '1px solid',
-        borderColor: gridColor,
-        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
-        borderRadius: '0.5rem',
-    };
-
     return (
         <ResponsiveContainer width="100%" height={200}>
             <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis type="number" stroke={axisColor} tickFormatter={(value) => unit === 'percent' ? `${value}%` : value.toLocaleString()} />
-                <YAxis type="category" dataKey="name" stroke={axisColor} width={60} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                <XAxis type="number" stroke={AXIS_COLOR} tickFormatter={(value) => unit === 'percent' ? `${value}%` : value.toLocaleString()} />
+                <YAxis type="category" dataKey="name" stroke={AXIS_COLOR} width={60} />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
-                    itemStyle={{ color: theme === 'dark' ? '#D4C3A9' : '#6B6358' }}
+                    labelStyle={{ color: TEXT_COLOR }}
+                    itemStyle={{ color: TEXT_COLOR }}
                     formatter={(value: number) => unit === 'percent' ? `${value.toFixed(2)}%` : formatCurrency(value, 'TWD')}
                 />
                 <Bar dataKey="value" name="貢獻度">
@@ -120,31 +108,21 @@ export const ProfitLossBarChart: React.FC<ProfitLossBarChartProps> = ({ data, th
 };
 
 // --- Yield Contribution Bar Chart ---
-export const YieldContributionChart: React.FC<ProfitLossBarChartProps> = ({ data, theme }) => {
+export const YieldContributionChart: React.FC<ProfitLossBarChartProps> = ({ data }) => {
     if (!data || data.length === 0) {
-        return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
+        return <div className="flex items-center justify-center h-full text-dark-text/60">無資料可顯示</div>;
     }
     
-    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
-    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
-    const tooltipStyle = {
-        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
-        border: '1px solid',
-        borderColor: gridColor,
-        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
-        borderRadius: '0.5rem',
-    };
-
     return (
         <ResponsiveContainer width="100%" height={200}>
             <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis type="number" stroke={axisColor} tickFormatter={(value) => `${value.toFixed(2)}%`} domain={[0, 'dataMax']} />
-                <YAxis type="category" dataKey="name" stroke={axisColor} width={60} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                <XAxis type="number" stroke={AXIS_COLOR} tickFormatter={(value) => `${value.toFixed(2)}%`} domain={[0, 'dataMax']} />
+                <YAxis type="category" dataKey="name" stroke={AXIS_COLOR} width={60} />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
-                    itemStyle={{ color: theme === 'dark' ? '#D4C3A9' : '#6B6358' }}
+                    labelStyle={{ color: TEXT_COLOR }}
+                    itemStyle={{ color: TEXT_COLOR }}
                     formatter={(value: number) => `${value.toFixed(2)}%`}
                 />
                 <Bar dataKey="value" name="貢獻度">
@@ -165,28 +143,16 @@ interface CompoundInterestChartData {
 }
 interface CompoundInterestChartProps {
     data: CompoundInterestChartData[];
-    theme: 'light' | 'dark';
     labelEstimated?: string;
     labelActual?: string;
     hideActual?: boolean;
 }
 export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({ 
     data, 
-    theme, 
     labelEstimated = "預估股利收入", 
     labelActual = "實際股利收入",
     hideActual = false
 }) => {
-    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
-    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
-    const tooltipStyle = {
-        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
-        border: '1px solid',
-        borderColor: gridColor,
-        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
-        borderRadius: '0.5rem',
-    };
-
     return (
         <ResponsiveContainer width="100%" height={350}>
             <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -196,15 +162,15 @@ export const CompoundInterestChart: React.FC<CompoundInterestChartProps> = ({
                         <stop offset="95%" stopColor={COLOR_PRIMARY} stopOpacity={0} />
                     </linearGradient>
                 </defs>
-                <XAxis dataKey="year" stroke={axisColor} />
+                <XAxis dataKey="year" stroke={AXIS_COLOR} />
                 <YAxis 
-                    stroke={axisColor} 
+                    stroke={AXIS_COLOR} 
                     tickFormatter={(val) => val === 0 ? '' : `${(val / 10000).toFixed(0)}W`} 
                 />
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
+                    labelStyle={{ color: TEXT_COLOR }}
                     formatter={(value: number) => formatCurrency(value, 'TWD')}
                 />
                 <Legend />
@@ -222,33 +188,22 @@ interface ReturnTrendChartData {
 }
 interface ReturnTrendChartProps {
     data: ReturnTrendChartData[];
-    theme: 'light' | 'dark';
     includeDividends: boolean;
 }
-export const ReturnTrendChart: React.FC<ReturnTrendChartProps> = ({ data, theme, includeDividends }) => {
+export const ReturnTrendChart: React.FC<ReturnTrendChartProps> = ({ data, includeDividends }) => {
     if (!data || data.length === 0) {
-        return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
+        return <div className="flex items-center justify-center h-full text-dark-text/60">無資料可顯示</div>;
     }
-
-    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
-    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
-    const tooltipStyle = {
-        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
-        border: '1px solid',
-        borderColor: gridColor,
-        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
-        borderRadius: '0.5rem',
-    };
 
     return (
         <ResponsiveContainer width="100%" height={350}>
             <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false}/>
-                <XAxis dataKey="date" stroke={axisColor} />
-                <YAxis stroke={axisColor} tickFormatter={(value) => `${value.toFixed(0)}%`}/>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false}/>
+                <XAxis dataKey="date" stroke={AXIS_COLOR} />
+                <YAxis stroke={AXIS_COLOR} tickFormatter={(value) => `${value.toFixed(0)}%`}/>
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: theme === 'dark' ? '#F5F1E9' : '#6B6358' }}
+                    labelStyle={{ color: TEXT_COLOR }}
                     formatter={(value: number) => `${value.toFixed(2)}%`}
                 />
                 <Legend />
@@ -273,25 +228,11 @@ interface PieChartData {
 }
 interface DistributionPieChartProps {
     data: PieChartData[];
-    theme: 'light' | 'dark';
 }
-export const DistributionPieChart: React.FC<DistributionPieChartProps> = ({ data, theme }) => {
+export const DistributionPieChart: React.FC<DistributionPieChartProps> = ({ data }) => {
     if (!data || data.length === 0) {
-         return <div className="flex items-center justify-center h-full text-light-text/60 dark:text-dark-text/60">無資料可顯示</div>;
+         return <div className="flex items-center justify-center h-full text-dark-text/60">無資料可顯示</div>;
     }
-
-    const axisColor = theme === 'dark' ? '#EAE1D4' : '#6B6358';
-    const gridColor = theme === 'dark' ? '#403D39' : '#EBE3D5';
-    const tooltipStyle = {
-        backgroundColor: theme === 'dark' ? '#403D39' : '#FEFBF6',
-        border: '1px solid',
-        borderColor: gridColor,
-        color: theme === 'dark' ? '#D4C3A9' : '#6B6358',
-        borderRadius: '0.5rem',
-    };
-
-    // Calculate percentages for custom label
-    const total = data.reduce((acc, cur) => acc + cur.value, 0);
 
     return (
         <ResponsiveContainer width="100%" height={300}>
@@ -310,11 +251,10 @@ export const DistributionPieChart: React.FC<DistributionPieChartProps> = ({ data
                         const x = cx + radius * Math.cos(-midAngle * RADIAN);
                         const y = cy + radius * Math.sin(-midAngle * RADIAN);
                         
-                        // FIX: Removed the 5% threshold logic to ensure all labels are shown, even for small slices like '主動型'
                         if (percent <= 0) return null;
 
                         return (
-                          <text x={x} y={y} fill={axisColor} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
+                          <text x={x} y={y} fill={AXIS_COLOR} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
                             {`${name} ${(percent * 100).toFixed(1)}%`}
                           </text>
                         );
@@ -326,7 +266,7 @@ export const DistributionPieChart: React.FC<DistributionPieChartProps> = ({ data
                 </Pie>
                 <Tooltip 
                     contentStyle={tooltipStyle}
-                    itemStyle={{ color: theme === 'dark' ? '#D4C3A9' : '#6B6358' }}
+                    itemStyle={{ color: TEXT_COLOR }}
                     formatter={(value: number) => formatCurrency(value, 'TWD')}
                 />
             </PieChart>

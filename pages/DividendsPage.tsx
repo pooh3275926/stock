@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Stock, Dividend, Settings, StockMetadataMap } from '../types';
-import { ActionMenu, SelectionActionBar, SearchInput, SortableHeaderCell, SortConfig, StockTags } from '../components/common';
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../components/Icons';
+import { ActionMenu, SelectionActionBar, SearchInput, StockTags } from '../components/common';
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon, DividendIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 
 interface DividendsPageProps { 
@@ -23,17 +23,13 @@ interface DividendsPageProps {
     deleteSelectedIds: () => void;
 }
 
-type SortDirection = 'asc' | 'desc';
-
 export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends, settings, stockMetadata, onAdd, onEdit, onDelete, selectedGroups, toggleGroupSelection, clearGroupSelection, deleteSelectedGroups, selectedIds, toggleIdSelection, clearIdSelection, deleteSelectedIds }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [sortConfig, setSortConfig] = useState<SortConfig<any>>({ key: 'stockSymbol', direction: 'asc' });
     const [showOnlyHeld, setShowOnlyHeld] = useState(false);
 
     const groupedDividends = useMemo(() => {
         const filtered = dividends.filter(d => d.stockSymbol.toLowerCase().includes(searchTerm.toLowerCase()));
         const groups: { [key: string]: { details: Dividend[], stockName: string } } = {};
-        
         filtered.forEach(d => {
             if (!groups[d.stockSymbol]) {
                 const stock = stocks.find(s => s.symbol === d.stockSymbol);
@@ -47,23 +43,16 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
             const stock = stocks.find(s => s.symbol === symbol);
             const financials = stock ? calculateStockFinancials(stock) : { totalCost: 0, currentShares: 0, avgCost: 0 };
             const yieldRate = financials.totalCost > 0 ? (totalAmount / financials.totalCost) * 100 : 0;
-            
-            const totalSharesForDividends = group.details.reduce((sum, d) => sum + (d.sharesHeld || 0), 0);
-            const weightedDividendSum = group.details.reduce((sum, d) => sum + ((d.dividendPerShare || 0) * (d.sharesHeld || 0)), 0);
-            const avgDividendPerShare = totalSharesForDividends > 0 ? weightedDividendSum / totalSharesForDividends : 0;
+            const frequency = stockMetadata[symbol]?.frequency || 1;
             
             const detailsWithCalcs = group.details.map(d => {
                 const sharesHeld = d.sharesHeld || 0;
                 const proportionalCost = sharesHeld * financials.avgCost;
-                const individualYieldRate = proportionalCost > 0 ? (d.amount / proportionalCost) * 100 : 0;
-                // FIX: Replaced missing stockDividendFrequency import with stockMetadata lookups.
-                const frequency = stockMetadata[symbol]?.frequency || 1;
-                const annualizedYield = individualYieldRate * frequency;
-                return { ...d, yieldRate: individualYieldRate, annualizedYield };
+                const indYield = proportionalCost > 0 ? (d.amount / proportionalCost) * 100 : 0;
+                return { ...d, yieldRate: indYield, annualizedYield: indYield * frequency };
             });
 
-            const totalAnnualizedYield = detailsWithCalcs.reduce((sum, d) => sum + d.annualizedYield, 0);
-            const avgAnnualizedYield = detailsWithCalcs.length > 0 ? totalAnnualizedYield / detailsWithCalcs.length : 0;
+            const avgAnnualizedYield = detailsWithCalcs.length > 0 ? detailsWithCalcs.reduce((s, d) => s + d.annualizedYield, 0) / detailsWithCalcs.length : 0;
 
             return {
                 stockSymbol: symbol,
@@ -74,228 +63,99 @@ export const DividendsPage: React.FC<DividendsPageProps> = ({ stocks, dividends,
                 details: detailsWithCalcs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
                 currentShares: financials.currentShares,
                 currentTotalCost: financials.totalCost,
-                currentAvgCost: financials.avgCost,
-                avgDividendPerShare,
             };
         });
 
-        if (showOnlyHeld) {
-            return result.filter(group => group.currentShares > 0);
-        }
-        return result;
-
+        return showOnlyHeld ? result.filter(g => g.currentShares > 0) : result;
     }, [dividends, stocks, searchTerm, showOnlyHeld, stockMetadata]);
 
-    const sortedGroups = useMemo(() => {
-        return [...groupedDividends].sort((a, b) => {
-            const valA = a[sortConfig.key as keyof typeof a];
-            const valB = b[sortConfig.key as keyof typeof b];
-            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-    }, [groupedDividends, sortConfig]);
-
-    const requestSort = (key: keyof any) => {
-        let direction: SortDirection = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-    };
-
-    const groupSelectionActive = selectedGroups.size > 0;
-    const idSelectionActive = selectedIds.size > 0;
-    const selectionActive = groupSelectionActive || idSelectionActive;
-
-    const clearSelection = () => {
-      clearGroupSelection();
-      clearIdSelection();
-    }
-
     return (
-        <div className="space-y-6" onClick={(e) => { if(selectionActive) { const target = e.target as HTMLElement; if(!target.closest('.selectable-item, .selection-bar')) { clearSelection(); } } }}>
-            <h1 className="text-3xl font-bold hidden md:block">股利紀錄</h1>
-            <div className="flex flex-col md:flex-row md:items-center gap-4">
-                <div className="flex-grow">
-                    <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="搜尋股票代號..."/>
+        <div className="space-y-10 pb-20">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h1 className="text-2xl font-black tracking-tight uppercase">股利發放紀錄</h1>
+                    <p className="text-lg opacity-40 font-bold mt-1 tracking-widest uppercase">Passive Income Streams</p>
                 </div>
-                <div className="flex items-center gap-4 flex-shrink-0">
-                    <label className="flex items-center space-x-2 cursor-pointer bg-light-card dark:bg-dark-card p-3 rounded-lg border border-light-border dark:border-dark-border">
-                        <input 
-                            type="checkbox" 
-                            className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary"
-                            checked={showOnlyHeld}
-                            onChange={(e) => setShowOnlyHeld(e.target.checked)}
-                        />
-                        <span className="font-medium text-light-text dark:text-dark-text select-none">僅顯示持有中</span>
-                    </label>
-                    <button onClick={onAdd} className="bg-primary hover:bg-primary-hover text-primary-foreground p-3 rounded-lg flex-shrink-0">
-                        <PlusIcon className="h-6 w-6" />
-                    </button>
-                </div>
+                <button onClick={onAdd} className="w-full md:w-auto bg-success hover:bg-success/80 text-white px-8 py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-success/20 transition-all">
+                    <PlusIcon className="h-6 w-6" /> 新增領息紀錄
+                </button>
             </div>
-            {groupSelectionActive && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedGroups.size} onCancel={clearGroupSelection} onDelete={deleteSelectedGroups} itemName="組" /></div>}
-            {idSelectionActive && <div onClick={e => e.stopPropagation()} className="selection-bar"><SelectionActionBar count={selectedIds.size} onCancel={clearIdSelection} onDelete={deleteSelectedIds} itemName="筆" /></div>}
+
+            <div className="flex flex-col md:flex-row gap-6 items-center">
+                <div className="flex-1 w-full"><SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="搜尋股票代號..."/></div>
+                <label className="flex items-center space-x-4 cursor-pointer bg-dark-card border border-dark-border px-6 py-3 rounded-2xl transition-all hover:border-primary/40">
+                    <input type="checkbox" className="form-checkbox h-6 w-6 text-primary bg-dark-bg border-dark-border rounded-lg" checked={showOnlyHeld} onChange={(e) => setShowOnlyHeld(e.target.checked)}/>
+                    <span className="font-black text-lg uppercase tracking-widest">僅顯示持有中</span>
+                </label>
+            </div>
+
+            {selectedGroups.size > 0 && <SelectionActionBar count={selectedGroups.size} onCancel={clearGroupSelection} onDelete={deleteSelectedGroups} itemName="組" />}
+            {selectedIds.size > 0 && <SelectionActionBar count={selectedIds.size} onCancel={clearIdSelection} onDelete={deleteSelectedIds} itemName="筆" />}
             
-            <div className="hidden md:block bg-light-card dark:bg-dark-card rounded-lg shadow-md">
-                <table className="w-full text-left">
-                    <thead className="bg-light-bg dark:bg-dark-bg">
-                        <tr>
-                            <th className="px-6 py-4 w-24"></th>
-                            <SortableHeaderCell label="股票代號 / 日期" sortKey="stockSymbol" sortConfig={sortConfig} onRequestSort={requestSort} />
-                             <th className="px-6 py-4 font-semibold text-right">參與股數</th>
-                             <th className="px-6 py-4 font-semibold text-right">每股股利</th>
-                             <th className="px-6 py-4 font-semibold text-right">持有總成本</th>
-                            <SortableHeaderCell label="淨股利" sortKey="totalAmount" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
-                            <SortableHeaderCell label="殖利率" sortKey="yieldRate" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
-                            <SortableHeaderCell label="年化" sortKey="avgAnnualizedYield" sortConfig={sortConfig} onRequestSort={requestSort} isNumeric={true}/>
-                            <th className="px-6 py-4 w-20"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sortedGroups.map(group => (
-                            <GroupedDividendRow 
-                                key={group.stockSymbol} 
-                                group={group} 
-                                settings={settings} 
-                                stockMetadata={stockMetadata}
-                                onEdit={onEdit} 
-                                onDelete={onDelete} 
-                                isSelected={selectedGroups.has(group.stockSymbol)} 
-                                toggleSelection={toggleGroupSelection}
-                                selectedIds={selectedIds}
-                                toggleIdSelection={toggleIdSelection}
-                            />
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-             <div className="md:hidden space-y-4">
-                {sortedGroups.map(group => (
-                    <GroupedDividendCard 
-                        key={group.stockSymbol}
-                        group={group}
-                        settings={settings}
-                        stockMetadata={stockMetadata}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        isSelected={selectedGroups.has(group.stockSymbol)} 
-                        toggleSelection={toggleGroupSelection}
-                        selectedIds={selectedIds}
-                        toggleIdSelection={toggleIdSelection}
-                    />
+            <div className="grid grid-cols-1 gap-8">
+                {groupedDividends.map(group => (
+                    <DividendBlockCard key={group.stockSymbol} group={group} settings={settings} stockMetadata={stockMetadata} onEdit={onEdit} onDelete={onDelete} isSelected={selectedGroups.has(group.stockSymbol)} toggleSelection={toggleGroupSelection} selectedIds={selectedIds} toggleIdSelection={toggleIdSelection} />
                 ))}
             </div>
         </div>
     );
 };
 
-// --- Child Components for DividendsPage ---
-
-const DividendRow: React.FC<{dividend: any; avgCost: number; settings: Settings; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (id: string) => void;}> = ({ dividend, avgCost, settings, onEdit, onDelete, isSelected, toggleSelection }) => {
-    const sharesHeld = dividend.sharesHeld || 0;
-    const proportionalCost = sharesHeld * avgCost;
-    
+const DividendBlockCard: React.FC<any> = ({ group, settings, stockMetadata, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
     return (
-        <tr className={`bg-light-bg/50 dark:bg-dark-bg/50 border-b border-light-border dark:border-dark-border last:border-b-0 hover:bg-light-bg dark:hover:bg-dark-bg selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20' : ''}`} onClick={() => toggleSelection(dividend.id)}>
-            <td className="px-6 py-4 w-24" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-center">
-                    <input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(dividend.id)} />
-                </div>
-            </td>
-            <td className="px-6 py-4">{new Date(dividend.date).toLocaleDateString()}</td>
-            <td className="px-6 py-4 text-right">{dividend.sharesHeld?.toLocaleString() ?? 'N/A'}</td>
-            <td className="px-6 py-4 text-right">{dividend.dividendPerShare?.toFixed(4)}</td>
-            <td className="px-6 py-4 text-right">{formatCurrency(proportionalCost, settings.currency)}</td>
-            <td className="px-6 py-4 text-right font-semibold text-success">{formatCurrency(dividend.amount, settings.currency)}</td>
-            <td className="px-6 py-4 text-right text-success">{dividend.yieldRate.toFixed(2)}%</td>
-            <td className="px-6 py-4 text-right text-success">{dividend.annualizedYield.toFixed(2)}%</td>
-            <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(dividend)} onDelete={() => onDelete(dividend)} /></td>
-        </tr>
-    );
-};
-
-const GroupedDividendRow: React.FC<{ group: any; settings: Settings; stockMetadata: StockMetadataMap; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedIds: Set<string>; toggleIdSelection: (id: string) => void; }> = ({ group, settings, stockMetadata, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    return (
-        <>
-            <tr className={`border-b border-light-border dark:border-dark-border last:border-b-0 hover:bg-light-bg dark:hover:bg-dark-bg cursor-pointer selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20' : ''}`} onClick={() => toggleSelection(group.stockSymbol)}>
-                <td className="px-6 py-4 w-24">
-                    <div className="flex items-center space-x-4">
-                        <span onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(group.stockSymbol)} /></span>
-                        <button onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-1 rounded-full hover:bg-light-border dark:hover:bg-dark-border">{isOpen ? <ChevronUpIcon className="h-5 w-5" /> : <ChevronDownIcon className="h-5 w-5" />}</button>
+        <div className={`bg-dark-card rounded-[2rem] shadow-xl border transition-all duration-300 ${isSelected ? 'border-primary ring-4 ring-primary/10' : 'border-dark-border'}`}>
+            <div className="p-6 md:p-8" onClick={() => toggleSelection(group.stockSymbol)}>
+                <div className="flex flex-col lg:flex-row justify-between gap-6">
+                    <div className="flex items-start gap-4">
+                        <div className="p-1 bg-dark-bg/50 rounded-lg" onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-dark-card border-dark-border rounded-lg" checked={isSelected} onChange={() => toggleSelection(group.stockSymbol)} /></div>
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-2xl font-black tracking-tight">{group.stockSymbol}</h3>
+                                <div className="text-lg font-bold opacity-40">{group.stockName}</div>
+                            </div>
+                            <div className="mt-2"><StockTags symbol={group.stockSymbol} stockMetadata={stockMetadata} /></div>
+                        </div>
                     </div>
-                </td>
-                <td className="px-6 py-4">
-                    <div className="font-bold">{group.stockSymbol}</div>
-                    <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
-                    <StockTags symbol={group.stockSymbol} stockMetadata={stockMetadata} />
-                </td>
-                <td className="px-6 py-4 text-right">{group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</td>
-                <td className="px-6 py-4 text-right">{group.avgDividendPerShare.toFixed(4)}</td>
-                <td className="px-6 py-4 text-right">{formatCurrency(group.currentTotalCost, settings.currency)}</td>
-                <td className="px-6 py-4 text-right font-semibold text-success">{formatCurrency(group.totalAmount, settings.currency)}</td>
-                <td className="px-6 py-4 text-right font-semibold text-success">{group.yieldRate.toFixed(2)}%</td>
-                <td className="px-6 py-4 text-right font-semibold text-success">{group.avgAnnualizedYield.toFixed(2)}%</td>
-                <td className="px-6 py-4 w-20 text-center"></td>
-            </tr>
-            {isOpen && group.details.map((d: Dividend) => (
-                <DividendRow key={d.id} dividend={d} avgCost={group.currentAvgCost} settings={settings} onEdit={onEdit} onDelete={onDelete} isSelected={selectedIds.has(d.id)} toggleSelection={toggleIdSelection} />
-            ))}
-        </>
-    );
-};
-
-const GroupedDividendCard: React.FC<{ group: any; settings: Settings; stockMetadata: StockMetadataMap; onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (symbol: string) => void; selectedIds: Set<string>; toggleIdSelection: (id: string) => void; }> = ({ group, settings, stockMetadata, onEdit, onDelete, isSelected, toggleSelection, selectedIds, toggleIdSelection }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    return (
-        <div className={`bg-light-card dark:bg-dark-card rounded-lg shadow-md selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20 ring-2 ring-primary' : ''}`}>
-             <div className="p-4 flex items-start space-x-4" onClick={() => toggleSelection(group.stockSymbol)}>
-                <span className="mt-1" onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(group.stockSymbol)} /></span>
-                <div className="flex-grow flex items-start justify-between cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
-                    <div>
-                        <div className="font-bold text-lg">{group.stockSymbol}</div>
-                        <div className="text-sm text-light-text/70 dark:text-dark-text/70">{group.stockName}</div>
-                        <StockTags symbol={group.stockSymbol} stockMetadata={stockMetadata} />
-                        <div className="text-xs text-light-text/70 dark:text-dark-text/70 mt-2">參與股數: {group.currentShares > 0 ? group.currentShares.toLocaleString() : 'N/A'}</div>
-                        <div className="text-xs text-light-text/70 dark:text-dark-text/70">每股股利: {group.avgDividendPerShare.toFixed(4)}</div>
-                        <div className="text-xs text-light-text/70 dark:text-dark-text/70">持有總成本: {formatCurrency(group.currentTotalCost, settings.currency)}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-2">
-                        <div className="font-semibold text-success text-lg">{formatCurrency(group.totalAmount, settings.currency)}</div>
-                        <div className="text-sm text-success">殖利率: {group.yieldRate.toFixed(2)}%</div>
-                        <div className="text-sm text-success">年化: {group.avgAnnualizedYield.toFixed(2)}%</div>
+                    <div className="flex flex-wrap items-center gap-6 lg:justify-end">
+                        <div className="text-right">
+                            <div className="text-lg font-black opacity-30 uppercase tracking-widest mb-1">累計領息</div>
+                            <div className="px-5 py-2 rounded-2xl border border-success/20 bg-success/10 text-success font-black text-2xl">{formatCurrency(group.totalAmount, settings.currency)}</div>
+                        </div>
+                        <div className="text-right px-6 border-l border-dark-border">
+                            <div className="text-lg font-black opacity-30 uppercase tracking-widest mb-1">預估年化殖利率</div>
+                            <div className="text-2xl font-black text-success">{group.avgAnnualizedYield.toFixed(2)}%</div>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-3 rounded-xl bg-dark-bg border border-dark-border hover:text-primary transition-all">
+                            <ChevronDownIcon className={`h-6 w-6 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
                     </div>
                 </div>
-                 <button onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-1 rounded-full hover:bg-light-border dark:hover:bg-dark-border flex-shrink-0 mt-1"><ChevronDownIcon className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} /></button>
             </div>
-            {isOpen && (
-                <div className="px-4 pb-4 mt-2 border-t border-light-border dark:border-dark-border space-y-2 pt-2">
-                    {group.details.map((d: Dividend) => (
-                        <DividendCard key={d.id} dividend={d} avgCost={group.currentAvgCost} settings={settings} onEdit={onEdit} onDelete={onDelete} isSelected={selectedIds.has(d.id)} toggleSelection={toggleIdSelection} />
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
 
-const DividendCard: React.FC<{dividend: any, avgCost: number, settings: Settings, onEdit: (d: Dividend) => void; onDelete: (d: Dividend) => void; isSelected: boolean; toggleSelection: (id: string) => void;}> = ({ dividend, avgCost, settings, onEdit, onDelete, isSelected, toggleSelection }) => {
-    return (
-    <div className={`bg-light-bg/50 dark:bg-dark-bg/50 rounded-lg p-3 flex items-center space-x-4 selectable-item ${isSelected ? 'bg-primary/10 dark:bg-primary/20' : ''}`} onClick={() => toggleSelection(dividend.id)}>
-        <span onClick={e => e.stopPropagation()}><input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-light-bg dark:bg-dark-bg border-light-border dark:border-dark-border rounded focus:ring-primary" checked={isSelected} onChange={() => toggleSelection(dividend.id)} /></span>
-        <div className="flex-grow flex justify-between items-center">
-            <div>
-                <div className="text-sm text-light-text/80 dark:text-dark-text/80">{new Date(dividend.date).toLocaleDateString()}</div>
-                 <div className="text-xs text-light-text/60 dark:text-dark-text/60">@{dividend.dividendPerShare?.toFixed(2)} x {dividend.sharesHeld?.toLocaleString()}</div>
-            </div>
-            <div className="text-right font-semibold text-success">
-                <div>{formatCurrency(dividend.amount, settings.currency)}</div>
-                <div className="text-sm">({dividend.yieldRate.toFixed(2)}% / 年化 {dividend.annualizedYield.toFixed(2)}%)</div>
+            <div className={`transition-all duration-700 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className="p-8 pt-0">
+                    <div className="bg-dark-bg/60 rounded-[1.5rem] p-6 border border-dark-border">
+                        <div className="grid grid-cols-1 gap-4 font-bold text-lg">
+                            {group.details.map((d:any) => (
+                                <div key={d.id} onClick={() => toggleIdSelection(d.id)} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${selectedIds.has(d.id) ? 'bg-primary/20 border-primary' : 'bg-dark-card border-transparent hover:border-primary/20'}`}>
+                                    <div className="flex items-center gap-4">
+                                        <input type="checkbox" className="form-checkbox h-5 w-5 text-primary bg-dark-bg border-dark-border rounded" checked={selectedIds.has(d.id)} onChange={() => toggleIdSelection(d.id)} onClick={e => e.stopPropagation()}/>
+                                        <div>
+                                            <div className="font-black text-lg">{new Date(d.date).toLocaleDateString()}</div>
+                                            <div className="text-sm opacity-40 font-bold mt-1">配發 {d.dividendPerShare?.toFixed(2)} / 參與 {d.sharesHeld?.toLocaleString()} 股</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                        <div className="text-right"><div className="text-sm font-black opacity-40 mb-1">淨收入</div><div className="font-black text-success">{formatCurrency(d.amount, settings.currency)}</div></div>
+                                        <div onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} /></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div className="flex-shrink-0" onClick={e => e.stopPropagation()}><ActionMenu onEdit={() => onEdit(dividend)} onDelete={() => onDelete(dividend)} /></div>
-    </div>
     );
 };
