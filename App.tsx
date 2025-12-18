@@ -19,7 +19,6 @@ import { BudgetPage } from './pages/BudgetPage';
 import { MorePage } from './pages/MorePage';
 import { ModalContainer, ModalState } from './components/modals';
 import { ScrollToTopButton } from './components/common';
-import { ParsedResult } from './utils/parser';
 
 const pageTitles: { [key in Page]: string } = {
   DASHBOARD: '股票總覽',
@@ -94,6 +93,132 @@ const App: React.FC = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
 
+  // --- 核心數據處理函數 (修正匯出匯入) ---
+
+  const handleExportData = () => {
+    const exportContent = {
+      stocks,
+      dividends,
+      donations,
+      budgetEntries,
+      historicalPrices,
+      strategies,
+      settings,
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(exportContent, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `investment-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = (data: any) => {
+    if (data.stocks) setStocks(data.stocks);
+    if (data.dividends) setDividends(data.dividends);
+    if (data.donations) setDonations(data.donations);
+    if (data.budgetEntries) setBudgetEntries(data.budgetEntries);
+    if (data.historicalPrices) setHistoricalPrices(data.historicalPrices);
+    if (data.strategies) setStrategies(data.strategies);
+    if (data.settings) setSettings(data.settings);
+    
+    setModal(null);
+    setPage('DASHBOARD');
+    alert('資料已成功還原！');
+  };
+
+  const handleSaveTransaction = (formData: any, mode: 'add' | 'edit' | 'buy' | 'sell', id?: string) => {
+    setStocks(prev => {
+      let newStocks = [...prev];
+      let stockIndex = newStocks.findIndex(s => s.symbol === formData.symbol);
+      
+      const newTransaction = {
+        id: id || crypto.randomUUID(),
+        type: formData.type,
+        shares: formData.shares,
+        price: formData.price,
+        date: formData.date,
+        fees: formData.fees
+      };
+
+      if (stockIndex === -1) {
+        newStocks.push({
+          symbol: formData.symbol,
+          name: formData.name || stockMaster[formData.symbol] || formData.symbol,
+          currentPrice: formData.currentPrice || formData.price,
+          transactions: [newTransaction]
+        });
+      } else {
+        const stock = { ...newStocks[stockIndex] };
+        if (formData.currentPrice !== undefined) stock.currentPrice = formData.currentPrice;
+        
+        if (mode === 'edit') {
+          stock.transactions = stock.transactions.map(t => t.id === id ? newTransaction : t);
+        } else {
+          stock.transactions = [...stock.transactions, newTransaction];
+        }
+        newStocks[stockIndex] = stock;
+      }
+      return newStocks;
+    });
+    setModal(null);
+  };
+
+  const handleDeleteStock = (stock: Stock) => {
+    const confirmDelete = () => {
+      setStocks(prev => prev.filter(s => s.symbol !== stock.symbol));
+      setModal(null);
+    };
+    setModal({ type: 'DELETE_CONFIRMATION', data: { onConfirm: confirmDelete, title: `刪除股票 ${stock.symbol}` } });
+  };
+
+  const handleDeleteTransaction = (symbol: string, id: string) => {
+    setStocks(prev => prev.map(s => {
+      if (s.symbol === symbol) {
+        return { ...s, transactions: s.transactions.filter(t => t.id !== id) };
+      }
+      return s;
+    }));
+  };
+
+  const handleSaveDividend = (data: Omit<Dividend, 'id'>, id?: string) => {
+    setDividends(prev => {
+      if (id) return prev.map(d => d.id === id ? { ...data, id } : d);
+      return [...prev, { ...data, id: crypto.randomUUID() }];
+    });
+    setModal(null);
+  };
+
+  const handleDeleteDividend = (div: Dividend) => {
+    setDividends(prev => prev.filter(d => d.id !== div.id));
+  };
+
+  const handleSaveDonation = (data: Omit<Donation, 'id'>, id?: string) => {
+    setDonations(prev => {
+      if (id) return prev.map(d => d.id === id ? { ...data, id } : d);
+      return [...prev, { ...data, id: crypto.randomUUID() }];
+    });
+    setModal(null);
+  };
+
+  const handleDeleteDonation = (don: Donation) => {
+    setDonations(prev => prev.filter(d => d.id !== don.id));
+  };
+
+  const handleSaveBudgetEntry = (data: Omit<BudgetEntry, 'id'>, id?: string) => {
+    setBudgetEntries(prev => {
+      if (id) return prev.map(e => e.id === id ? { ...data, id } : e);
+      return [...prev, { ...data, id: crypto.randomUUID() }];
+    });
+    setModal(null);
+  };
+
+  const handleDeleteBudgetEntry = (ent: BudgetEntry) => {
+    setBudgetEntries(prev => prev.filter(e => e.id !== ent.id));
+  };
+
   const handleSaveStrategy = (strategyData: Omit<Strategy, 'id'>, id?: string) => {
     setStrategies(prev => {
        const index = prev.findIndex(s => s.id === id || (s.targetSymbol === strategyData.targetSymbol));
@@ -104,6 +229,7 @@ const App: React.FC = () => {
        }
        return [...prev, { ...strategyData, id: crypto.randomUUID() }];
     });
+    setModal(null);
   };
 
   const handleReorderStrategies = (newStrategies: Strategy[]) => {
@@ -118,21 +244,62 @@ const App: React.FC = () => {
     setModal({ type: 'DELETE_CONFIRMATION', data: { onConfirm: confirmDelete, title: '刪除複利策略' } });
   };
 
-  const handleSaveTransaction = (formData: any, mode: any, id?: string) => { /* ... (保留原有邏輯) ... */ };
-  const handleDeleteStock = (stock: Stock) => { /* ... (保留原有邏輯) ... */ };
-  const handleEditTransaction = (symbol: string, id: string) => { /* ... (保留原有邏輯) ... */ };
-  const handleDeleteTransaction = (symbol: string, id: string) => { /* ... (保留原有邏輯) ... */ };
-  const handleSaveDividend = (data: any, id?: string) => { /* ... (保留原有邏輯) ... */ };
-  const handleDeleteDividend = (div: any) => { /* ... (保留原有邏輯) ... */ };
-  const handleSaveDonation = (data: any, id?: string) => { /* ... (保留原有邏輯) ... */ };
-  const handleDeleteDonation = (don: any) => { /* ... (保留原有邏輯) ... */ };
-  const handleSaveBudgetEntry = (data: any, id?: string) => { /* ... (保留原有邏輯) ... */ };
-  const handleDeleteBudgetEntry = (ent: any) => { /* ... (保留原有邏輯) ... */ };
-  const handleUpdateAllPrices = (prices: any) => { /* ... (保留原有邏輯) ... */ };
-  const handleAutoFetchPrices = async () => { /* ... (保留原有邏輯) ... */ };
-  const handleExportData = () => { /* ... (保留原有邏輯) ... */ };
-  const handleImportData = (data: any) => { /* ... (保留原有邏輯) ... */ };
-  const handleBulkImport = (type: any, data: any) => { /* ... (保留原有邏輯) ... */ };
+  const handleUpdateAllPrices = (newPrices: { [symbol: string]: number }) => {
+    setStocks(prev => prev.map(stock => {
+      if (newPrices[stock.symbol]) {
+        return { ...stock, currentPrice: newPrices[stock.symbol] };
+      }
+      return stock;
+    }));
+    
+    // 同時記錄到歷史價格
+    const currentYearMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+    setHistoricalPrices(prev => {
+      let newHistorical = [...prev];
+      Object.entries(newPrices).forEach(([symbol, price]) => {
+        let hpIndex = newHistorical.findIndex(hp => hp.stockSymbol === symbol);
+        if (hpIndex === -1) {
+          newHistorical.push({ stockSymbol: symbol, prices: { [currentYearMonth]: price } });
+        } else {
+          newHistorical[hpIndex] = {
+            ...newHistorical[hpIndex],
+            prices: { ...newHistorical[hpIndex].prices, [currentYearMonth]: price }
+          };
+        }
+      });
+      return newHistorical;
+    });
+    setModal(null);
+  };
+
+  const handleBulkImport = (type: string, data: any[]) => {
+    if (type === 'transactions') {
+      data.forEach(item => {
+        handleSaveTransaction(item, 'add');
+      });
+    } else if (type === 'dividends') {
+      setDividends(prev => [...prev, ...data.map(d => ({ ...d, id: crypto.randomUUID() }))]);
+    } else if (type === 'donations') {
+      setDonations(prev => [...prev, ...data.map(d => ({ ...d, id: crypto.randomUUID() }))]);
+    } else if (type === 'prices') {
+      setHistoricalPrices(prev => {
+        let newHistory = [...prev];
+        data.forEach(item => {
+          let hpIndex = newHistory.findIndex(hp => hp.stockSymbol === item.symbol);
+          if (hpIndex === -1) {
+            newHistory.push({ stockSymbol: item.symbol, prices: { [item.yearMonth]: item.price } });
+          } else {
+            newHistory[hpIndex] = {
+              ...newHistory[hpIndex],
+              prices: { ...newHistory[hpIndex].prices, [item.yearMonth]: item.price }
+            };
+          }
+        });
+        return newHistory;
+      });
+    }
+    setModal(null);
+  };
 
   const portfolioCalculations = useMemo(() => {
     let totalCurrentCost = 0, totalMarketValue = 0, totalRealizedPnl = 0;
@@ -165,12 +332,12 @@ const App: React.FC = () => {
                   onReorder={handleReorderStrategies}
                 />;
       case 'DASHBOARD': return <DashboardPage stocks={stocks} dividends={dividends} settings={settings} theme={theme} allStockSymbols={allStockSymbols} filteredSymbols={dashboardFilteredSymbols} onFilterChange={setDashboardFilteredSymbols} availableYears={availableYears} selectedYear={selectedDashboardYear} onYearChange={setSelectedDashboardYear} historicalPrices={historicalPrices} />;
-      case 'PORTFOLIO': return <PortfolioPage stocks={activeStocks} settings={settings} onAdd={() => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'add' } })} onEdit={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'edit', stock: s } })} onDelete={handleDeleteStock} onBuy={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'buy', stock: s } })} onSell={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'sell', stock: s } })} selectedSymbols={new Set()} toggleSelection={() => {}} clearSelection={() => {}} deleteSelected={() => {}} selectedTransactionIds={new Set()} toggleTransactionSelection={() => {}} clearTransactionSelection={() => {}} deleteSelectedTransactions={() => {}} onEditTransaction={handleEditTransaction} onDeleteTransaction={handleDeleteTransaction} onAutoUpdate={handleAutoFetchPrices} />;
+      case 'PORTFOLIO': return <PortfolioPage stocks={activeStocks} settings={settings} onAdd={() => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'add' } })} onEdit={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'edit', stock: s } })} onDelete={handleDeleteStock} onBuy={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'buy', stock: s } })} onSell={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'sell', stock: s } })} selectedSymbols={new Set()} toggleSelection={() => {}} clearSelection={() => {}} deleteSelected={() => {}} selectedTransactionIds={new Set()} toggleTransactionSelection={() => {}} clearTransactionSelection={() => {}} deleteSelectedTransactions={() => {}} onEditTransaction={(sym, id) => { const stock = stocks.find(s => s.symbol === sym); const tx = stock?.transactions.find(t => t.id === id); setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'edit', stock, transaction: tx } }); }} onDeleteTransaction={handleDeleteTransaction} onAutoUpdate={async () => { alert('自動更新功能需對接交易所 API，目前請使用手動「一鍵更新」。'); }} />;
       case 'DIVIDENDS': return <DividendsPage stocks={stocks} dividends={dividends} settings={settings} onAdd={() => setModal({ type: 'DIVIDEND', data: { mode: 'add' } })} onEdit={(d) => setModal({type: 'DIVIDEND', data: { mode: 'edit', dividend: d }})} onDelete={handleDeleteDividend} selectedGroups={new Set()} toggleGroupSelection={() => {}} clearGroupSelection={() => {}} deleteSelectedGroups={() => {}} selectedIds={new Set()} toggleIdSelection={() => {}} clearIdSelection={() => {}} deleteSelectedIds={() => {}} />;
       case 'TOTAL_RETURN': return <TotalReturnPage stocks={activeStocks} dividends={dividends} settings={settings} />;
       case 'BUDGET': return <BudgetPage stocks={stocks} dividends={dividends} donations={donations} budgetEntries={budgetEntries} settings={settings} onAdd={() => setModal({ type: 'BUDGET_ENTRY', data: { mode: 'add' } })} onEdit={(e) => setModal({type: 'BUDGET_ENTRY', data: { mode: 'edit', entry: e }})} onDelete={handleDeleteBudgetEntry} selectedIds={new Set()} toggleSelection={() => {}} clearSelection={() => {}} deleteSelected={() => {}} />;
       case 'DONATION_FUND': return <DonationFundPage stats={portfolioCalculations} donations={donations} settings={settings} onAdd={() => setModal({ type: 'DONATION_FORM', data: { mode: 'add' } })} onEdit={(d) => setModal({type: 'DONATION_FORM', data: { mode: 'edit', donation: d }})} onDelete={handleDeleteDonation} selectedIds={new Set()} toggleSelection={() => {}} clearSelection={() => {}} deleteSelected={() => {}} />;
-      case 'TRANSACTION_HISTORY': return <TransactionHistoryPage stocks={stocksWithSellHistory} settings={settings} onBuy={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'buy', stock: s } })} selectedGroups={new Set()} toggleGroupSelection={() => {}} clearSelection={() => {}} deleteSelected={() => {}} selectedTransactionIds={new Set()} toggleTransactionSelection={() => {}} clearTransactionSelection={() => {}} deleteSelectedTransactions={() => {}} onEditTransaction={handleEditTransaction} onDeleteTransaction={handleDeleteTransaction} />;
+      case 'TRANSACTION_HISTORY': return <TransactionHistoryPage stocks={stocksWithSellHistory} settings={settings} onBuy={(s) => setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'buy', stock: s } })} selectedGroups={new Set()} toggleGroupSelection={() => {}} clearSelection={() => {}} deleteSelected={() => {}} selectedTransactionIds={new Set()} toggleTransactionSelection={() => {}} clearTransactionSelection={() => {}} deleteSelectedTransactions={() => {}} onEditTransaction={(sym, id) => { const stock = stocks.find(s => s.symbol === sym); const tx = stock?.transactions.find(t => t.id === id); setModal({ type: 'STOCK_TRANSACTION', data: { mode: 'edit', stock, transaction: tx } }); }} onDeleteTransaction={handleDeleteTransaction} />;
       case 'HISTORICAL_PRICES': return <HistoricalPricesPage stocks={stocks} historicalPrices={historicalPrices} onSave={setHistoricalPrices} onOpenUpdateAllPricesModal={() => setModal({ type: 'UPDATE_ALL_PRICES', data: { stocks: activeStocks } })} />;
       case 'SETTINGS': return <SettingsPage onExport={handleExportData} onImport={handleImportData} openModal={setModal} onBulkImport={handleBulkImport} />;
       case 'MORE': return <MorePage setPage={setPage} />;
