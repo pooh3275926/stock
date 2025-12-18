@@ -49,6 +49,7 @@ export const stockDefinitions: { [key: string]: StockMetadata } = {
     '00983A': { name: '主動中信ARK創新', market: '美股', type: '主動型', industry: 'NASDAQ' },
     '00984A': { name: '主動安聯台灣高息', market: '台股', type: '主動型', industry: '金融' },
     '00986A': { name: '主動台新龍頭成長', market: '美股', type: '主動型', industry: 'NASDAQ' },
+    '00991A': { name: '主動復華未來50', market: '台股', type: '主動型', industry: '半導體' },        
     '2330': { name: '台積電', market: '台股', type: '成長型', industry: '半導體' },    
     '5483': { name: '中美晶', market: '台股', type: '成長型', industry: '半導體' },
 };
@@ -101,6 +102,7 @@ export const stockDividendFrequency: { [key: string]: number } = {
     '00983A': 1, 
     '00984A': 4,  
     '00986A': 1,   
+    '00991A': 2,     
     '2330': 4,       
     '5483': 2,    
 };
