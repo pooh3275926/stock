@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import type { Stock, Dividend, Settings, Strategy, Transaction } from '../types';
 import { CompoundInterestChart } from '../components/PortfolioCharts';
-import { StrategyIcon, ArrowUpIcon, HistoryIcon, TrashIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon } from '../components/Icons';
+import { StrategyIcon, ArrowUpIcon, HistoryIcon, TrashIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, EditIcon, CloseIcon } from '../components/Icons';
 import { calculateStockFinancials, formatCurrency } from '../utils/calculations';
 import { stockDefinitions, stockDividendCalendar, stockDividendFrequency, stockDefaultYields } from '../utils/data';
 
@@ -21,21 +21,18 @@ interface StrategyPageProps {
 
 export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, dividends, settings, theme, onAdd, onEdit, onSave, onDelete, onReorder }) => {
   
-  // 自動與手動合併，並根據現有排序持久化
   const labStocks = useMemo(() => {
-    // 1. 取得所有高股息標的
     const autoTargetStocks = stocks.filter(s => {
+      // 預設抓取高股息，但排序後不限制標籤
       const isHighDividend = stockDefinitions[s.symbol]?.type === '高股息';
       return calculateStockFinancials(s).currentShares > 0 && isHighDividend;
     });
 
-    // 2. 建立一個包含所有應顯示標的的 ID 清單
     const allSymbols = Array.from(new Set([
       ...strategies.map(s => s.targetSymbol),
       ...autoTargetStocks.map(s => s.symbol)
     ]));
 
-    // 3. 根據 strategies 的順序來排序，其餘放後面
     const symbolOrder = strategies.map(s => s.targetSymbol);
     const sortedSymbols = allSymbols.sort((a, b) => {
       const idxA = symbolOrder.indexOf(a);
@@ -46,12 +43,10 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
       return idxA - idxB;
     });
 
-    // 4. 對應回策略對象
     return sortedSymbols.map(symbol => {
       const existing = strategies.find(s => s.targetSymbol === symbol);
       if (existing) return existing;
 
-      // 如果是自動偵測但尚未存成策略的
       const stock = stocks.find(s => s.symbol === symbol)!;
       const financials = calculateStockFinancials(stock);
       const stockDivs = dividends.filter(d => d.stockSymbol === symbol);
@@ -75,19 +70,13 @@ export const StrategyPage: React.FC<StrategyPageProps> = ({ strategies, stocks, 
   const handleMove = (index: number, direction: 'up' | 'down') => {
     const newIdx = direction === 'up' ? index - 1 : index + 1;
     if (newIdx < 0 || newIdx >= labStocks.length) return;
-
     const newLabStocks = [...labStocks];
     const [movedItem] = newLabStocks.splice(index, 1);
     newLabStocks.splice(newIdx, 0, movedItem);
-
-    // 將所有項目轉為正式 Strategy 儲存
     const updatedStrategies = newLabStocks.map(item => {
-      if (item.id.startsWith('auto-')) {
-        return { ...item, id: crypto.randomUUID() };
-      }
+      if (item.id.startsWith('auto-')) return { ...item, id: crypto.randomUUID() };
       return item;
     });
-
     onReorder(updatedStrategies);
   };
 
@@ -147,6 +136,7 @@ const StrategyEngineCard: React.FC<{
 }> = ({ strategy, settings, theme, onUpdate, allDividends, stockData, onDelete, onMoveUp, onMoveDown, isFirst, isLast }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [historyYear, setHistoryYear] = useState<number>(new Date().getFullYear());
+    const [isEditMode, setIsEditMode] = useState(false);
     
     const availableYears = useMemo(() => {
         const years = new Set<number>();
@@ -155,10 +145,27 @@ const StrategyEngineCard: React.FC<{
         return Array.from(years).sort((a, b) => b - a);
     }, [stockData, allDividends, strategy.targetSymbol]);
 
+    // 月度實戰帳本計算 (支援手動覆蓋)
     const monthlyLedger = useMemo(() => {
-        if (!stockData) return Array(12).fill(null);
         return Array.from({ length: 12 }, (_, i) => {
             const m = i + 1;
+            const yearStr = historyYear.toString();
+            const monthStr = m.toString();
+            
+            // 優先檢查是否有手動輸入數據
+            const manual = strategy.manualActuals?.[yearStr]?.[monthStr];
+
+            if (manual) {
+                const divInflow = manual.divInflow;
+                const totalBuy = manual.totalBuy;
+                const reinvested = Math.min(divInflow, totalBuy);
+                const extra = Math.max(0, totalBuy - divInflow);
+                return { m, divInflow, totalBuy, reinvested, extra, isManual: true };
+            }
+
+            // 無手動數據則從系統抓取
+            if (!stockData) return { m, divInflow: 0, totalBuy: 0, reinvested: 0, extra: 0, isManual: false };
+
             const monthDivs = allDividends.filter(d => 
                 d.stockSymbol === strategy.targetSymbol && 
                 new Date(d.date).getFullYear() === historyYear &&
@@ -173,20 +180,56 @@ const StrategyEngineCard: React.FC<{
             const totalBuy = monthTxs.reduce((sum, t) => sum + (t.shares * t.price + t.fees), 0);
             const reinvested = Math.min(divInflow, totalBuy);
             const extra = Math.max(0, totalBuy - divInflow);
-            return { m, divInflow, totalBuy, reinvested, extra };
-        });
-    }, [stockData, allDividends, strategy.targetSymbol, historyYear]);
 
+            return { m, divInflow, totalBuy, reinvested, extra, isManual: false };
+        });
+    }, [stockData, allDividends, strategy, historyYear]);
+
+    // 實戰統計計算
     const actualYearStats = useMemo(() => {
-        if (!monthlyLedger) return null;
-        const totalDiv = monthlyLedger.reduce((sum, m) => sum + (m?.divInflow || 0), 0);
-        const totalInvested = monthlyLedger.reduce((sum, m) => sum + (m?.totalBuy || 0), 0);
-        const reinvestedAmount = monthlyLedger.reduce((sum, m) => sum + (m?.reinvested || 0), 0);
-        const extraCapital = monthlyLedger.reduce((sum, m) => sum + (m?.extra || 0), 0);
+        const totalDiv = monthlyLedger.reduce((sum, m) => sum + m.divInflow, 0);
+        const reinvestedAmount = monthlyLedger.reduce((sum, m) => sum + m.reinvested, 0);
+        const extraCapital = monthlyLedger.reduce((sum, m) => sum + m.extra, 0);
+        
+        // 年度報酬率 = 年度領息 / (再投 + 額外)
+        const totalInputThisYear = reinvestedAmount + extraCapital;
+        const annualReturn = totalInputThisYear > 0 ? (totalDiv / totalInputThisYear) * 100 : 0;
+
+        // 累計統計 (抓取所有年份)
         const financials = stockData ? calculateStockFinancials(stockData) : null;
-        const annualReturn = financials ? financials.unrealizedPnlPercent : 0;
-        return { totalDiv, totalInvested, reinvestedAmount, extraCapital, annualReturn };
-    }, [monthlyLedger, stockData]);
+        const totalHoldingCost = financials?.totalCost || 0;
+        const totalCumulativeDiv = allDividends
+            .filter(d => d.stockSymbol === strategy.targetSymbol)
+            .reduce((sum, d) => sum + d.amount, 0);
+        const cumulativeReturn = totalHoldingCost > 0 ? (totalCumulativeDiv / totalHoldingCost) * 100 : 0;
+
+        return { totalDiv, reinvestedAmount, extraCapital, annualReturn, cumulativeReturn, totalHoldingCost, totalCumulativeDiv };
+    }, [monthlyLedger, stockData, allDividends, strategy.targetSymbol]);
+
+    const handleManualChange = (month: number, field: 'divInflow' | 'totalBuy', value: string) => {
+        const num = parseFloat(value) || 0;
+        const updatedManualActuals = { ...(strategy.manualActuals || {}) };
+        const yearStr = historyYear.toString();
+        const monthStr = month.toString();
+
+        if (!updatedManualActuals[yearStr]) updatedManualActuals[yearStr] = {};
+        if (!updatedManualActuals[yearStr][monthStr]) {
+            // 如果原本沒手動數據，先抓目前的系統值作為初始
+            const current = monthlyLedger.find(ml => ml.m === month)!;
+            updatedManualActuals[yearStr][monthStr] = { divInflow: current.divInflow, totalBuy: current.totalBuy };
+        }
+
+        updatedManualActuals[yearStr][monthStr][field] = num;
+        onUpdate({ ...strategy, manualActuals: updatedManualActuals });
+    };
+
+    const resetManual = (month: number) => {
+        if (!strategy.manualActuals?.[historyYear]?.[month]) return;
+        const updatedManualActuals = { ...strategy.manualActuals };
+        delete updatedManualActuals[historyYear][month.toString()];
+        if (Object.keys(updatedManualActuals[historyYear]).length === 0) delete updatedManualActuals[historyYear];
+        onUpdate({ ...strategy, manualActuals: updatedManualActuals });
+    };
 
     const sim = useMemo(() => {
         const years = 20;
@@ -254,72 +297,113 @@ const StrategyEngineCard: React.FC<{
                 </div>
             </div>
 
-            {/* 年度實戰 12 月份格點 - 強烈對比版本 */}
+            {/* 年度實戰 12 月份格點 */}
             <div className="px-8 pb-8">
-                <div className="flex justify-between items-center mb-6 bg-light-bg/50 dark:bg-dark-bg/40 p-5 rounded-[2rem] border border-light-border dark:border-dark-border">
+                <div className="flex justify-between items-center mb-6 bg-light-bg/50 dark:bg-dark-bg/40 p-5 rounded-[2.5rem] border border-light-border dark:border-dark-border">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-primary/20 rounded-xl">
                             <HistoryIcon className="h-6 w-6 text-primary" />
                         </div>
                         <h4 className="text-base font-black dark:text-dark-text uppercase tracking-widest">年度實戰對照帳本</h4>
                     </div>
-                    <select 
-                        value={historyYear} 
-                        onChange={(e) => setHistoryYear(parseInt(e.target.value))}
-                        className="bg-light-card dark:bg-dark-card border-2 border-primary/30 rounded-2xl px-6 py-2 text-sm font-black dark:text-dark-text focus:ring-4 focus:ring-primary/20 outline-none transition-all"
-                    >
-                        {availableYears.length > 0 ? availableYears.map(y => <option key={y} value={y}>{y} 年度</option>) : <option>{new Date().getFullYear()} 年度</option>}
-                    </select>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setIsEditMode(!isEditMode)} 
+                            className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${isEditMode ? 'bg-success text-white' : 'bg-primary/10 text-primary border border-primary/20'}`}
+                        >
+                            {isEditMode ? <><CloseIcon className="h-4 w-4"/> 結束編輯</> : <><EditIcon className="h-4 w-4"/> 手動修正數據</>}
+                        </button>
+                        <select 
+                            value={historyYear} 
+                            onChange={(e) => setHistoryYear(parseInt(e.target.value))}
+                            className="bg-light-card dark:bg-dark-card border-2 border-primary/30 rounded-2xl px-6 py-2 text-sm font-black dark:text-dark-text focus:ring-4 focus:ring-primary/20 outline-none transition-all"
+                        >
+                            {availableYears.length > 0 ? availableYears.map(y => <option key={y} value={y}>{y} 年度</option>) : <option>{new Date().getFullYear()} 年度</option>}
+                        </select>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
                     {monthlyLedger.map((month) => (
-                        <div key={month.m} className={`p-5 rounded-[2rem] border-2 transition-all ${month.totalBuy > 0 ? 'bg-primary/10 border-primary/40 shadow-xl shadow-primary/5 scale-105' : 'bg-light-bg/30 dark:bg-dark-bg/20 border-transparent opacity-80'}`}>
-                            <div className="text-xs font-black dark:text-dark-text mb-3 border-b border-primary/10 pb-2">{month.m} 月</div>
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-[11px] font-bold">
-                                    <span className="text-light-text/60 dark:text-dark-text/80">領息:</span>
-                                    <span className="text-primary font-black">{month.divInflow > 0 ? `+${formatCurrency(month.divInflow, settings.currency)}` : '-'}</span>
+                        <div key={month.m} className={`p-5 rounded-[2rem] border-2 transition-all relative ${month.totalBuy > 0 || month.divInflow > 0 ? 'bg-primary/10 border-primary/40 shadow-xl shadow-primary/5 scale-105' : 'bg-light-bg/30 dark:bg-dark-bg/20 border-transparent opacity-80'}`}>
+                            {month.isManual && (
+                                <button onClick={() => resetManual(month.m)} className="absolute -top-2 -right-2 bg-danger text-white p-1 rounded-full shadow-lg" title="重設為系統抓取">
+                                    <CloseIcon className="h-3 w-3" />
+                                </button>
+                            )}
+                            <div className="text-xs font-black dark:text-dark-text mb-3 border-b border-primary/10 pb-2 flex justify-between">
+                                <span>{month.m} 月</span>
+                                {month.isManual && <span className="text-[8px] text-danger">MANUAL</span>}
+                            </div>
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-light-text/60 dark:text-dark-text/80 font-black block uppercase">領息流入</span>
+                                    {isEditMode ? (
+                                        <input 
+                                            type="number" value={month.divInflow || ''} 
+                                            onChange={(e) => handleManualChange(month.m, 'divInflow', e.target.value)}
+                                            className="w-full bg-white dark:bg-dark-bg border border-primary/30 rounded-lg p-1 text-xs font-black dark:text-dark-text"
+                                        />
+                                    ) : (
+                                        <span className="text-primary font-black text-sm">{month.divInflow > 0 ? `+${formatCurrency(month.divInflow, settings.currency)}` : '-'}</span>
+                                    )}
                                 </div>
-                                <div className="flex justify-between text-[11px] font-bold">
-                                    <span className="text-light-text/60 dark:text-dark-text/80">買入:</span>
-                                    <span className="dark:text-dark-text font-black">{month.totalBuy > 0 ? formatCurrency(month.totalBuy, settings.currency) : '-'}</span>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-light-text/60 dark:text-dark-text/80 font-black block uppercase">總買入</span>
+                                    {isEditMode ? (
+                                        <input 
+                                            type="number" value={month.totalBuy || ''} 
+                                            onChange={(e) => handleManualChange(month.m, 'totalBuy', e.target.value)}
+                                            className="w-full bg-white dark:bg-dark-bg border border-primary/30 rounded-lg p-1 text-xs font-black dark:text-dark-text"
+                                        />
+                                    ) : (
+                                        <span className="dark:text-dark-text font-black text-sm">{month.totalBuy > 0 ? formatCurrency(month.totalBuy, settings.currency) : '-'}</span>
+                                    )}
                                 </div>
-                                <div className="pt-2 mt-2 border-t border-primary/20">
-                                    <div className="flex justify-between text-[10px] font-black">
-                                        <span className="text-success/80 dark:text-success">再投:</span>
-                                        <span className="text-success font-black">{formatCurrency(month.reinvested, settings.currency)}</span>
+                                {!isEditMode && (
+                                    <div className="pt-2 mt-2 border-t border-primary/20">
+                                        <div className="flex justify-between text-[10px] font-black">
+                                            <span className="text-success/80 dark:text-success">股利再投:</span>
+                                            <span className="text-success font-black">{formatCurrency(month.reinvested, settings.currency)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-[10px] font-black">
+                                            <span className="text-success/80 dark:text-success">額外加碼:</span>
+                                            <span className="text-success font-black">{formatCurrency(month.extra, settings.currency)}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between text-[10px] font-black">
-                                        <span className="text-success/80 dark:text-success">加碼:</span>
-                                        <span className="text-success font-black">{formatCurrency(month.extra, settings.currency)}</span>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     ))}
                 </div>
 
-                {actualYearStats && (
-                    <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-8 p-8 bg-success/10 dark:bg-success/5 rounded-[2.5rem] border-2 border-success/30">
-                        <div>
-                            <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度實際領息</p>
-                            <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.totalDiv, settings.currency)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度股息再投入</p>
-                            <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.reinvestedAmount, settings.currency)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度本金加碼</p>
-                            <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.extraCapital, settings.currency)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度報酬率</p>
-                            <p className="text-2xl font-black text-success">{actualYearStats.annualReturn.toFixed(2)}%</p>
-                        </div>
+                {/* 實戰績效統計 */}
+                <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-8 p-8 bg-success/10 dark:bg-success/5 rounded-[3rem] border-2 border-success/30">
+                    <div className="col-span-2 md:col-span-1">
+                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度實際領息</p>
+                        <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.totalDiv, settings.currency)}</p>
                     </div>
-                )}
+                    <div>
+                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度額外加碼</p>
+                        <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.extraCapital, settings.currency)}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">年度報酬率</p>
+                        <p className="text-2xl font-black text-success">{actualYearStats.annualReturn.toFixed(2)}%</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">累計領息</p>
+                        <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.totalCumulativeDiv, settings.currency)}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">持有總成本</p>
+                        <p className="text-2xl font-black text-success">{formatCurrency(actualYearStats.totalHoldingCost, settings.currency)}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-success font-black mb-2 uppercase tracking-widest">累計報酬率</p>
+                        <p className="text-2xl font-black text-success">{actualYearStats.cumulativeReturn.toFixed(2)}%</p>
+                    </div>
+                </div>
             </div>
 
             {/* Controls */}

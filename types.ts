@@ -47,8 +47,17 @@ export interface Strategy {
   monthlyAmount: number;
   exDivExtraAmount: number;
   reinvest: boolean;
-  expectedAnnualReturn: number; // 預期年化報酬 (含息)
-  expectedDividendYield: number; // 預期殖利率
+  expectedAnnualReturn: number;
+  expectedDividendYield: number;
+  // 手動覆蓋的年度實戰數據: { "2024": { "1": { divInflow: 100, totalBuy: 500 }, ... } }
+  manualActuals?: {
+    [year: string]: {
+      [month: string]: {
+        divInflow: number;
+        totalBuy: number;
+      }
+    }
+  };
 }
 
 export interface Portfolio {
