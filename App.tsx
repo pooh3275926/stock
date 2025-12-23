@@ -119,7 +119,7 @@ const App: React.FC = () => {
         return await response.json();
       };
       const [twseResult, tpexResult] = await Promise.allSettled([
-        fetchWithProxy('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'),
+        fetchWithProxy('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'),
         fetchWithProxy('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes')
       ]);
       const priceMap: { [key: string]: number } = {};
@@ -135,10 +135,39 @@ const App: React.FC = () => {
           if (!isNaN(price) && item.SecId) priceMap[item.SecId] = price;
         });
       }
-      const updatedCount = Object.keys(priceMap).length;
-      if (updatedCount > 0) {
+      
+      const portfolioSymbols = stocks.map(s => s.symbol);
+      const updatedSymbols = portfolioSymbols.filter(sym => priceMap[sym] !== undefined);
+
+      if (updatedSymbols.length > 0) {
+        // 1. Update Current Stocks Prices
         setStocks(prev => prev.map(s => priceMap[s.symbol] !== undefined ? { ...s, currentPrice: priceMap[s.symbol] } : s));
-        alert(`更新成功！已同步 ${updatedCount} 檔股票現價。`);
+        
+        // 2. Automatically write to Historical Prices
+        const now = new Date();
+        const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        setHistoricalPrices(prev => {
+          const newHistorical = [...prev];
+          updatedSymbols.forEach(sym => {
+            const price = priceMap[sym];
+            const idx = newHistorical.findIndex(hp => hp.stockSymbol === sym);
+            if (idx > -1) {
+              newHistorical[idx] = {
+                ...newHistorical[idx],
+                prices: { ...newHistorical[idx].prices, [yearMonth]: price }
+              };
+            } else {
+              newHistorical.push({
+                stockSymbol: sym,
+                prices: { [yearMonth]: price }
+              });
+            }
+          });
+          return newHistorical;
+        });
+
+        alert(`更新成功！已同步 ${updatedSymbols.length} 檔股票現價，並已自動紀錄本月歷史股價。`);
       } else {
         throw new Error('未取得有效資料');
       }
