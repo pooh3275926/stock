@@ -50,6 +50,7 @@ export const initialStockMetadataMap: StockMetadataMap = {
     '00984A': { symbol: '00984A', name: '主動安聯台灣高息', market: '台股', type: '主動型', industry: '金融', mode: '季配', frequency: 4, exDivMonths: [1, 4, 7, 10], payMonths: [2, 5, 8, 11], defaultYield: 6 },
     '00985A': { symbol: '00985A', name: '主動野村台灣50', market: '台股', type: '主動型', industry: '台灣50', mode: '年配', frequency: 1, exDivMonths: [1], payMonths: [2], defaultYield: 6 },
     '00986A': { symbol: '00986A', name: '主動台新龍頭成長', market: '美股', type: '主動型', industry: 'NASDAQ', mode: '年配', frequency: 1, exDivMonths: [11], payMonths: [12], defaultYield: 6 },
+    '00990A': { symbol: '00990A', name: '主動元大AI新經濟', market: '美股', type: '主動型', industry: '科技', mode: '不配息', frequency: 0, exDivMonths: [], payMonths: [], defaultYield: 6 },    
     '00991A': { symbol: '00991A', name: '主動復華未來50', market: '台股', type: '主動型', industry: '半導體', mode: '半年配', frequency: 2, exDivMonths: [6, 12], payMonths: [7, 1], defaultYield: 6 },
 
     // --- 新增資料 (個股) ---
